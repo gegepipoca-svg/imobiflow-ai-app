@@ -39,10 +39,14 @@ export interface FutureFlowItem {
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
 /**
- * Fetch KPI totals from the v_operation_summary view and payment data.
+ * Fetch KPI totals. If participantId is provided, scopes to that participant only.
  */
-export async function getDashboardKpis(): Promise<DashboardKpis> {
-  // Get total credit and commission from active/completed operations
+export async function getDashboardKpis(participantId?: string | null): Promise<DashboardKpis> {
+  if (participantId) {
+    return getConsultorKpis(participantId)
+  }
+
+  // Admin: full KPIs
   const { data: operations, error: opsError } = await supabase
     .from('operations')
     .select('credit_value, commission_total, status')
@@ -59,7 +63,6 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     0,
   )
 
-  // Get total paid from payments
   const { data: payments, error: payError } = await supabase
     .from('payments')
     .select('amount')
@@ -71,7 +74,6 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     0,
   )
 
-  // Get future liability: sum of pending/partial installments
   const { data: installments, error: instError } = await supabase
     .from('commission_installments')
     .select('amount, status')
@@ -90,6 +92,65 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     commissionPaid,
     commissionPending: commissionGenerated - commissionPaid,
     futureLiability,
+  }
+}
+
+/**
+ * Consultor-scoped KPIs: only their distributions/payments.
+ */
+async function getConsultorKpis(participantId: string): Promise<DashboardKpis> {
+  // Get distributions for this participant
+  const { data: distributions, error: distError } = await supabase
+    .from('commission_distributions')
+    .select('id, amount, status')
+    .eq('participant_id', participantId)
+
+  if (distError) throw distError
+
+  const commissionGenerated = (distributions ?? []).reduce(
+    (sum, d) => sum + (d.amount ?? 0),
+    0,
+  )
+
+  // Get payments for this participant's distributions
+  const distIds = (distributions ?? []).map((d) => d.id)
+  let commissionPaid = 0
+
+  if (distIds.length > 0) {
+    const { data: payments, error: payError } = await supabase
+      .from('payments')
+      .select('amount')
+      .in('distribution_id', distIds)
+
+    if (payError) throw payError
+    commissionPaid = (payments ?? []).reduce(
+      (sum, p) => sum + (p.amount ?? 0),
+      0,
+    )
+  }
+
+  // Get operations this participant is in
+  const { data: opParts, error: opError } = await supabase
+    .from('operation_participants')
+    .select('operation:operations(credit_value, status)')
+    .eq('participant_id', participantId)
+
+  if (opError) throw opError
+
+  const totalCredit = (opParts ?? []).reduce((sum, op) => {
+    const operation = op.operation as unknown as { credit_value: number; status: string } | null
+    if (operation && ['active', 'completed'].includes(operation.status)) {
+      return sum + (operation.credit_value ?? 0)
+    }
+    return sum
+  }, 0)
+
+  return {
+    totalCredit,
+    commissionGenerated,
+    commissionPaid,
+    commissionPending: commissionGenerated - commissionPaid,
+    futureLiability: commissionGenerated - commissionPaid,
   }
 }
 

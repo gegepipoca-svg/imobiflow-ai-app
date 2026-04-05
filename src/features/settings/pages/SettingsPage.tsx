@@ -143,12 +143,7 @@ function ProfileTab() {
 
   useEffect(() => {
     if (profile) {
-      // AuthProvider Profile uses 'name', DB Profile uses 'full_name'
-      const currentName =
-        (profile as unknown as Record<string, unknown>).full_name as string ||
-        profile.name ||
-        ''
-      setName(currentName)
+      setName(profile.full_name || '')
     }
   }, [profile])
 
@@ -213,7 +208,7 @@ function ProfileTab() {
 
   const profileRecord = profile as unknown as Record<string, unknown>
   const displayName =
-    (profileRecord.full_name as string) || profile.name || ''
+    (profileRecord.full_name as string) || profile.full_name || ''
   const displayRole =
     USER_ROLE_LABELS[profile.role as UserRole] || profile.role
 

@@ -4,6 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency } from '@/shared/utils/formatters'
 import { PRODUCT_TYPE_LABELS, PARTICIPANT_TYPE_LABELS } from '@/shared/utils/constants'
 import type { ProductType, ParticipantType } from '@/shared/types'
+import { useAuth } from '@/features/auth/hooks/useAuth'
 import {
   useDashboardKpis,
   useCommissionByParticipant,
@@ -426,9 +427,30 @@ function EmptyChart({ message }: { message: string }) {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { data: kpis, isLoading: kpisLoading } = useDashboardKpis()
+  const { isAdmin, isConsultor, participantId, profile } = useAuth()
+  const { data: kpis, isLoading: kpisLoading } = useDashboardKpis(
+    isConsultor ? participantId : undefined
+  )
 
-  const kpiCards = [
+  const consultorKpis = [
+    {
+      title: 'Minha Comissao',
+      value: kpis?.commissionGenerated ?? 0,
+      icon: <TrendingUp className="h-5 w-5" />,
+    },
+    {
+      title: 'Ja Recebi',
+      value: kpis?.commissionPaid ?? 0,
+      icon: <CheckCircle className="h-5 w-5" />,
+    },
+    {
+      title: 'A Receber',
+      value: kpis?.commissionPending ?? 0,
+      icon: <Clock className="h-5 w-5" />,
+    },
+  ]
+
+  const adminKpis = [
     {
       title: 'Total de Credito',
       value: kpis?.totalCredit ?? 0,
@@ -456,11 +478,13 @@ export default function DashboardPage() {
     },
   ]
 
+  const kpiCards = isConsultor ? consultorKpis : adminKpis
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Dashboard"
-        description="Visao geral de comissoes e operacoes"
+        title={isConsultor ? `Olá, ${profile?.full_name?.split(' ')[0] ?? 'Consultor'}!` : 'Dashboard'}
+        description={isConsultor ? 'Acompanhe suas comissões e operações' : 'Visão geral de comissões e operações'}
       />
 
       {/* KPI Cards */}
@@ -476,58 +500,69 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Chart 1: Commission by Participant */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Comissao por Participante</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CommissionByParticipantChart />
-          </CardContent>
-        </Card>
+      {/* Charts Grid - Admin only */}
+      {isAdmin && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Comissao por Participante</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CommissionByParticipantChart />
+            </CardContent>
+          </Card>
 
-        {/* Chart 2: Commission by Product Type */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Comissao por Tipo de Produto</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CommissionByProductTypeChart />
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Comissao por Tipo de Produto</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CommissionByProductTypeChart />
+            </CardContent>
+          </Card>
 
-        {/* Chart 3: Monthly Evolution */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Evolucao Mensal de Comissoes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MonthlyEvolutionChart />
-          </CardContent>
-        </Card>
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Evolucao Mensal de Comissoes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MonthlyEvolutionChart />
+            </CardContent>
+          </Card>
 
-        {/* Chart 4: Participant Ranking */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Ranking de Participantes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ParticipantRankingChart />
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Ranking de Participantes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ParticipantRankingChart />
+            </CardContent>
+          </Card>
 
-        {/* Chart 5: Future Cash Flow */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Fluxo de Caixa Futuro</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FutureFlowChart />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Consultor: simple message */}
+      {isConsultor && (
         <Card>
-          <CardHeader>
-            <CardTitle>Fluxo de Caixa Futuro</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FutureFlowChart />
+          <CardContent className="pt-6">
+            <div className="text-center py-8 space-y-2">
+              <p className="text-lg font-medium">Suas operações e comissões</p>
+              <p className="text-sm text-muted-foreground">
+                Use o menu lateral para ver suas operações e acompanhar seus pagamentos
+              </p>
+            </div>
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
   )
 }

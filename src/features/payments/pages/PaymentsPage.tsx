@@ -45,6 +45,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 
+import { useAuth } from '@/features/auth/hooks/useAuth'
 import {
   useDistributions,
   usePayments,
@@ -275,7 +276,10 @@ function RecordPaymentDialog({
 // ─── Distributions Tab ──────────────────────────────────────────────────────
 
 function DistributionsTab() {
-  const { data: distributions, isLoading } = useDistributions()
+  const { isConsultor, participantId } = useAuth()
+  const { data: distributions, isLoading } = useDistributions(
+    isConsultor ? participantId : undefined
+  )
   const [statusFilter, setStatusFilter] = useState<DistributionStatus | 'all'>('all')
   const [search, setSearch] = useState('')
   const [selectedDistribution, setSelectedDistribution] =
@@ -562,11 +566,13 @@ function PaymentsHistoryTab() {
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export default function PaymentsPage() {
+  const { isConsultor } = useAuth()
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Pagamentos"
-        description="Gerencie pagamentos de comissoes e acompanhe distribuicoes"
+        title={isConsultor ? "Minhas Comissões" : "Pagamentos"}
+        description={isConsultor ? "Acompanhe suas comissões e pagamentos" : "Gerencie pagamentos de comissões e acompanhe distribuições"}
       />
 
       <Tabs defaultValue="distributions">

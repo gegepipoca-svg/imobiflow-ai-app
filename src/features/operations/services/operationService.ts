@@ -53,12 +53,35 @@ export interface CreateOperationPayload {
 
 /**
  * Fetch all operations ordered by date DESC, with participant count.
+ * If participantId is provided, only returns operations where that participant is involved.
  */
-export async function getOperations(): Promise<OperationWithCount[]> {
-  const { data, error } = await supabase
+export async function getOperations(participantId?: string | null): Promise<OperationWithCount[]> {
+  let operationIds: string[] | null = null;
+
+  // If filtering by participant, first get their operation IDs
+  if (participantId) {
+    const { data: opParts, error: opPartsError } = await supabase
+      .from('operation_participants')
+      .select('operation_id')
+      .eq('participant_id', participantId)
+
+    if (opPartsError) throw opPartsError
+    operationIds = (opParts ?? []).map((op) => op.operation_id)
+
+    // If no operations found, return empty
+    if (operationIds.length === 0) return []
+  }
+
+  let query = supabase
     .from('operations')
     .select('*, operation_participants(id)')
     .order('operation_date', { ascending: false })
+
+  if (operationIds) {
+    query = query.in('id', operationIds)
+  }
+
+  const { data, error } = await query
 
   if (error) throw error
 

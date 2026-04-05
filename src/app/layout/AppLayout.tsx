@@ -10,8 +10,8 @@ export function AppLayout() {
   const { profile, signOut } = useAuth();
 
   const user = {
-    name: profile?.name ?? "Usuário",
-    role: profile?.role ?? "agent",
+    name: profile?.full_name ?? "Usuário",
+    role: profile?.role ?? "consultor",
     email: profile?.email ?? "",
   };
 

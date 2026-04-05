@@ -11,10 +11,10 @@ import {
 const DISTRIBUTIONS_KEY = ['distributions'] as const
 const PAYMENTS_KEY = ['payments'] as const
 
-export function useDistributions() {
+export function useDistributions(participantId?: string | null) {
   return useQuery({
-    queryKey: DISTRIBUTIONS_KEY,
-    queryFn: getDistributionsWithDetails,
+    queryKey: [...DISTRIBUTIONS_KEY, { participantId }],
+    queryFn: () => getDistributionsWithDetails(participantId),
   })
 }
 

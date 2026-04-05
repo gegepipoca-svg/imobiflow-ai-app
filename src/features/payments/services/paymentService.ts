@@ -31,9 +31,9 @@ export interface PaymentWithDetails extends Payment {
  * Fetch all commission distributions enriched with participant name,
  * operation code, installment details, and aggregated payment totals.
  */
-export async function getDistributionsWithDetails(): Promise<DistributionWithDetails[]> {
+export async function getDistributionsWithDetails(participantId?: string | null): Promise<DistributionWithDetails[]> {
   // Fetch distributions with joined data
-  const { data: distributions, error: distError } = await supabase
+  let query = supabase
     .from('commission_distributions')
     .select(`
       *,
@@ -46,6 +46,12 @@ export async function getDistributionsWithDetails(): Promise<DistributionWithDet
       )
     `)
     .order('created_at', { ascending: false })
+
+  if (participantId) {
+    query = query.eq('participant_id', participantId)
+  }
+
+  const { data: distributions, error: distError } = await query
 
   if (distError) throw distError
 

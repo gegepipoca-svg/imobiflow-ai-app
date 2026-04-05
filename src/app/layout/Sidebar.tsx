@@ -9,19 +9,32 @@ import {
   Calculator,
   Settings2,
   HelpCircle,
+  UserPlus,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import type { AppRole } from "@/features/auth/components/AuthProvider";
 
-const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, to: "/" },
-  { label: "Operações", icon: FileText, to: "/operations" },
-  { label: "Participantes", icon: Users, to: "/participants" },
-  { label: "Regras de Comissão", icon: Settings, to: "/commission-rules" },
-  { label: "Pagamentos", icon: CreditCard, to: "/payments" },
-  { label: "Simulação", icon: Calculator, to: "/simulation" },
-  { label: "Configurações", icon: Settings2, to: "/settings" },
-  { label: "Ajuda", icon: HelpCircle, to: "/help" },
+interface NavItem {
+  label: string;
+  icon: typeof LayoutDashboard;
+  to: string;
+  roles: AppRole[];
+}
+
+const navItems: NavItem[] = [
+  { label: "Dashboard", icon: LayoutDashboard, to: "/", roles: ["admin", "consultor"] },
+  { label: "Minhas Operações", icon: FileText, to: "/operations", roles: ["consultor"] },
+  { label: "Operações", icon: FileText, to: "/operations", roles: ["admin"] },
+  { label: "Participantes", icon: Users, to: "/participants", roles: ["admin"] },
+  { label: "Regras de Comissão", icon: Settings, to: "/commission-rules", roles: ["admin"] },
+  { label: "Minhas Comissões", icon: CreditCard, to: "/payments", roles: ["consultor"] },
+  { label: "Pagamentos", icon: CreditCard, to: "/payments", roles: ["admin"] },
+  { label: "Simulação", icon: Calculator, to: "/simulation", roles: ["admin", "consultor"] },
+  { label: "Gerenciar Usuários", icon: UserPlus, to: "/users", roles: ["admin"] },
+  { label: "Configurações", icon: Settings2, to: "/settings", roles: ["admin"] },
+  { label: "Ajuda", icon: HelpCircle, to: "/help", roles: ["admin", "consultor"] },
 ];
 
 interface SidebarProps {
@@ -30,6 +43,11 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
+  const { profile } = useAuth();
+  const userRole = profile?.role ?? "consultor";
+
+  const visibleItems = navItems.filter((item) => item.roles.includes(userRole));
+
   return (
     <>
       {/* Overlay mobile */}
@@ -61,7 +79,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {navItems.map((item) => (
+          {visibleItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

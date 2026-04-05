@@ -7,13 +7,17 @@ import { StatusBadge } from '@/shared/components/StatusBadge'
 import { CurrencyDisplay } from '@/shared/components/CurrencyDisplay'
 import { formatDate } from '@/shared/utils/formatters'
 import { PRODUCT_TYPE_LABELS } from '@/shared/utils/constants'
+import { useAuth } from '@/features/auth/hooks/useAuth'
 import { useOperations } from '../hooks/useOperations'
 import type { OperationWithCount } from '../services/operationService'
 import type { ProductType } from '@/shared/types'
 
 export default function OperationsListPage() {
   const navigate = useNavigate()
-  const { data: operations = [], isLoading } = useOperations()
+  const { isAdmin, isConsultor, participantId } = useAuth()
+  const { data: operations = [], isLoading } = useOperations(
+    isConsultor ? participantId : undefined
+  )
 
   const columns: DataTableColumn<OperationWithCount & Record<string, unknown>>[] = [
     {
@@ -79,13 +83,15 @@ export default function OperationsListPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Operacoes"
-        description="Gerenciar operacoes e comissoes"
+        title={isConsultor ? "Minhas Operações" : "Operações"}
+        description={isConsultor ? "Acompanhe suas operações e comissões" : "Gerenciar operações e comissões"}
         action={
-          <Button onClick={() => navigate('/operations/new')}>
-            <Plus className="size-4" />
-            Nova Operacao
-          </Button>
+          isAdmin ? (
+            <Button onClick={() => navigate('/operations/new')}>
+              <Plus className="size-4" />
+              Nova Operação
+            </Button>
+          ) : undefined
         }
       />
 

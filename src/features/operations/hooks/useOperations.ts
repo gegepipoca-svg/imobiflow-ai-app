@@ -12,10 +12,10 @@ import type { OperationStatus } from '@/shared/types'
 
 const OPERATIONS_KEY = ['operations'] as const
 
-export function useOperations() {
+export function useOperations(participantId?: string | null) {
   return useQuery({
-    queryKey: OPERATIONS_KEY,
-    queryFn: getOperations,
+    queryKey: [...OPERATIONS_KEY, { participantId }],
+    queryFn: () => getOperations(participantId),
   })
 }
 

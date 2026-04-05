@@ -10,10 +10,10 @@ import {
 
 const DASHBOARD_KEY = ['dashboard'] as const
 
-export function useDashboardKpis() {
+export function useDashboardKpis(participantId?: string | null) {
   return useQuery({
-    queryKey: [...DASHBOARD_KEY, 'kpis'],
-    queryFn: getDashboardKpis,
+    queryKey: [...DASHBOARD_KEY, 'kpis', { participantId }],
+    queryFn: () => getDashboardKpis(participantId),
   })
 }
 

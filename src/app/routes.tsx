@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/app/layout/AppLayout";
 import { AuthLayout } from "@/app/layout/AuthLayout";
 import { ProtectedRoute } from "@/features/auth/components/ProtectedRoute";
+import { RoleGuard } from "@/features/auth/components/RoleGuard";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Lazy-loaded pages
@@ -20,6 +21,7 @@ const PaymentsPage = lazy(() => import("@/features/payments/pages/PaymentsPage")
 const SimulationPage = lazy(() => import("@/features/simulation/pages/SimulationPage"));
 const SettingsPage = lazy(() => import("@/features/settings/pages/SettingsPage"));
 const HelpPage = lazy(() => import("@/features/help/pages/HelpPage"));
+const UsersPage = lazy(() => import("@/features/users/pages/UsersPage"));
 
 function PageLoader() {
   return (
@@ -44,32 +46,34 @@ export function AppRoutes() {
           {/* Protected app routes */}
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
+              {/* Acesso geral (admin + consultor) */}
               <Route index element={<DashboardPage />} />
-
               <Route path="operations">
                 <Route index element={<OperationsListPage />} />
-                <Route path="new" element={<OperationFormPage />} />
                 <Route path=":id" element={<OperationDetailPage />} />
-                <Route path=":id/edit" element={<OperationFormPage />} />
               </Route>
-
-              <Route path="participants">
-                <Route index element={<ParticipantsListPage />} />
-                <Route path="new" element={<ParticipantFormPage />} />
-                <Route path=":id" element={<ParticipantDetailPage />} />
-                <Route path=":id/edit" element={<ParticipantFormPage />} />
-              </Route>
-
-              <Route path="commission-rules">
-                <Route index element={<CommissionRulesPage />} />
-                <Route path="new" element={<CommissionRuleFormPage />} />
-                <Route path=":id/edit" element={<CommissionRuleFormPage />} />
-              </Route>
-
               <Route path="payments" element={<PaymentsPage />} />
               <Route path="simulation" element={<SimulationPage />} />
-              <Route path="settings" element={<SettingsPage />} />
               <Route path="help" element={<HelpPage />} />
+
+              {/* Admin only */}
+              <Route element={<RoleGuard allowedRoles={["admin"]} />}>
+                <Route path="operations/new" element={<OperationFormPage />} />
+                <Route path="operations/:id/edit" element={<OperationFormPage />} />
+                <Route path="participants">
+                  <Route index element={<ParticipantsListPage />} />
+                  <Route path="new" element={<ParticipantFormPage />} />
+                  <Route path=":id" element={<ParticipantDetailPage />} />
+                  <Route path=":id/edit" element={<ParticipantFormPage />} />
+                </Route>
+                <Route path="commission-rules">
+                  <Route index element={<CommissionRulesPage />} />
+                  <Route path="new" element={<CommissionRuleFormPage />} />
+                  <Route path=":id/edit" element={<CommissionRuleFormPage />} />
+                </Route>
+                <Route path="users" element={<UsersPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
             </Route>
           </Route>
         </Routes>

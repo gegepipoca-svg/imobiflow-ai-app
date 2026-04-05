@@ -33,8 +33,7 @@ function getInitials(name: string): string {
 function getRoleLabel(role: string): string {
   const labels: Record<string, string> = {
     admin: "Administrador",
-    manager: "Gerente",
-    agent: "Corretor",
+    consultor: "Consultor",
   };
   return labels[role] || role;
 }
