@@ -19,6 +19,7 @@ const CommissionRuleFormPage = lazy(() => import("@/features/commission-rules/pa
 const PaymentsPage = lazy(() => import("@/features/payments/pages/PaymentsPage"));
 const SimulationPage = lazy(() => import("@/features/simulation/pages/SimulationPage"));
 const SettingsPage = lazy(() => import("@/features/settings/pages/SettingsPage"));
+const HelpPage = lazy(() => import("@/features/help/pages/HelpPage"));
 
 function PageLoader() {
   return (
@@ -68,6 +69,7 @@ export function AppRoutes() {
               <Route path="payments" element={<PaymentsPage />} />
               <Route path="simulation" element={<SimulationPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="help" element={<HelpPage />} />
             </Route>
           </Route>
         </Routes>

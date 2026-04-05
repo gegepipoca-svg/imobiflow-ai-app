@@ -8,6 +8,7 @@ import {
   CreditCard,
   Calculator,
   Settings2,
+  HelpCircle,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ const navItems = [
   { label: "Pagamentos", icon: CreditCard, to: "/payments" },
   { label: "Simulação", icon: Calculator, to: "/simulation" },
   { label: "Configurações", icon: Settings2, to: "/settings" },
+  { label: "Ajuda", icon: HelpCircle, to: "/help" },
 ];
 
 interface SidebarProps {
@@ -46,7 +48,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       >
         {/* Brand */}
         <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
-          <span className="text-xl font-bold tracking-tight">ComissãoPro</span>
+          <span className="text-xl font-bold tracking-tight text-sidebar-primary">ComissãoPro</span>
           <Button
             variant="ghost"
             size="icon-sm"
