@@ -22,6 +22,7 @@ const SimulationPage = lazy(() => import("@/features/simulation/pages/Simulation
 const SettingsPage = lazy(() => import("@/features/settings/pages/SettingsPage"));
 const HelpPage = lazy(() => import("@/features/help/pages/HelpPage"));
 const UsersPage = lazy(() => import("@/features/users/pages/UsersPage"));
+const ReportsPage = lazy(() => import("@/features/reports/pages/ReportsPage"));
 
 function PageLoader() {
   return (
@@ -53,6 +54,7 @@ export function AppRoutes() {
                 <Route path=":id" element={<OperationDetailPage />} />
               </Route>
               <Route path="payments" element={<PaymentsPage />} />
+              <Route path="reports" element={<ReportsPage />} />
               <Route path="simulation" element={<SimulationPage />} />
               <Route path="help" element={<HelpPage />} />
 

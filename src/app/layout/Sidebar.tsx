@@ -10,6 +10,7 @@ import {
   Settings2,
   HelpCircle,
   UserPlus,
+  FileBarChart,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,8 @@ const navItems: NavItem[] = [
   { label: "Regras de Comissão", icon: Settings, to: "/commission-rules", roles: ["admin"] },
   { label: "Minhas Comissões", icon: CreditCard, to: "/payments", roles: ["consultor"] },
   { label: "Pagamentos", icon: CreditCard, to: "/payments", roles: ["admin"] },
+  { label: "Meu Relatório", icon: FileBarChart, to: "/reports", roles: ["consultor"] },
+  { label: "Relatórios", icon: FileBarChart, to: "/reports", roles: ["admin"] },
   { label: "Simulação", icon: Calculator, to: "/simulation", roles: ["admin", "consultor"] },
   { label: "Gerenciar Usuários", icon: UserPlus, to: "/users", roles: ["admin"] },
   { label: "Configurações", icon: Settings2, to: "/settings", roles: ["admin"] },
