@@ -5,8 +5,10 @@ import {
   getOperation,
   createOperation,
   updateOperationStatus,
+  updateOperationClient,
   deleteOperation,
   type CreateOperationPayload,
+  type OperationClientData,
 } from '../services/operationService'
 import type { OperationStatus } from '@/shared/types'
 
@@ -56,6 +58,24 @@ export function useUpdateOperationStatus() {
     },
     onError: (error: Error) => {
       toast.error('Erro ao atualizar status.', {
+        description: error.message,
+      })
+    },
+  })
+}
+
+export function useUpdateOperationClient() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, clientData }: { id: string; clientData: OperationClientData }) =>
+      updateOperationClient(id, clientData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OPERATIONS_KEY })
+      toast.success('Dados do cliente atualizados.')
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao atualizar dados do cliente.', {
         description: error.message,
       })
     },

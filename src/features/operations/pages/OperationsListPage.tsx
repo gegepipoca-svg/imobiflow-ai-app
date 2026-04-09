@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Plus, CheckCircle2, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { DataTable, type DataTableColumn } from '@/shared/components/DataTable'
@@ -30,6 +30,27 @@ export default function OperationsListPage() {
       header: 'Data',
       sortable: true,
       cell: (row) => formatDate(row.operation_date as string),
+    },
+    {
+      key: 'client_name',
+      header: 'Cliente',
+      cell: (row) => (row.client_name as string) || '-',
+    },
+    {
+      key: 'client_paid',
+      header: 'Pgto Cliente',
+      cell: (row) => {
+        if (!(row.client_name as string)) return '-'
+        return row.client_paid ? (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
+            <CheckCircle2 className="size-3.5" /> Pago
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <Clock className="size-3.5" /> Pendente
+          </span>
+        )
+      },
     },
     {
       key: 'product_type',

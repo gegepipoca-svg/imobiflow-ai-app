@@ -9,10 +9,54 @@ import type {
   Participant,
 } from '@/shared/types'
 
+// ─── Client metadata stored in notes field as JSON prefix ──────────────────
+
+export interface OperationClientData {
+  client_name: string
+  client_paid: boolean
+}
+
+export function parseClientData(notes: string | null): OperationClientData | null {
+  if (!notes) return null
+  try {
+    if (notes.startsWith('{"client_')) {
+      const endIdx = notes.indexOf('}') + 1
+      return JSON.parse(notes.slice(0, endIdx)) as OperationClientData
+    }
+  } catch { /* ignore parse errors */ }
+  return null
+}
+
+export function extractUserNotes(notes: string | null): string {
+  if (!notes) return ''
+  if (notes.startsWith('{"client_')) {
+    const endIdx = notes.indexOf('}') + 1
+    return notes.slice(endIdx).trim()
+  }
+  return notes
+}
+
+export function buildNotesWithClient(
+  clientData: OperationClientData | null,
+  userNotes: string,
+): string {
+  const parts: string[] = []
+  if (clientData) {
+    parts.push(JSON.stringify(clientData))
+  }
+  if (userNotes.trim()) {
+    parts.push(userNotes.trim())
+  }
+  return parts.join(' ')
+}
+
 // ─── Extended types for joined queries ──────────────────────────────────────
 
 export interface OperationWithCount extends Operation {
   participant_count: number
+  client_name?: string
+  client_paid?: boolean
+  user_notes?: string
 }
 
 export interface OperationParticipantWithName extends OperationParticipant {
@@ -85,13 +129,19 @@ export async function getOperations(participantId?: string | null): Promise<Oper
 
   if (error) throw error
 
-  return (data ?? []).map((row) => ({
-    ...row,
-    participant_count: Array.isArray(row.operation_participants)
-      ? row.operation_participants.length
-      : 0,
-    operation_participants: undefined,
-  })) as unknown as OperationWithCount[]
+  return (data ?? []).map((row) => {
+    const clientData = parseClientData(row.notes)
+    return {
+      ...row,
+      participant_count: Array.isArray(row.operation_participants)
+        ? row.operation_participants.length
+        : 0,
+      operation_participants: undefined,
+      client_name: clientData?.client_name ?? '',
+      client_paid: clientData?.client_paid ?? false,
+      user_notes: extractUserNotes(row.notes),
+    }
+  }) as unknown as OperationWithCount[]
 }
 
 /**
@@ -197,6 +247,33 @@ export async function updateOperationStatus(
 
   if (error) throw error
   return data as Operation
+}
+
+/**
+ * Update client data (name + payment status) on an operation.
+ */
+export async function updateOperationClient(
+  id: string,
+  clientData: OperationClientData,
+): Promise<void> {
+  // Get current notes to preserve user notes
+  const { data: op, error: fetchError } = await supabase
+    .from('operations')
+    .select('notes')
+    .eq('id', id)
+    .single()
+
+  if (fetchError) throw fetchError
+
+  const userNotes = extractUserNotes(op.notes)
+  const newNotes = buildNotesWithClient(clientData, userNotes)
+
+  const { error } = await supabase
+    .from('operations')
+    .update({ notes: newNotes })
+    .eq('id', id)
+
+  if (error) throw error
 }
 
 /**

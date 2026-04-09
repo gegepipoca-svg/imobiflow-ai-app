@@ -8,6 +8,9 @@ import {
   CreditCard,
   Hash,
   RefreshCw,
+  User,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -55,8 +58,13 @@ import type { OperationStatus, ProductType, ParticipantType } from '@/shared/typ
 import {
   useOperation,
   useUpdateOperationStatus,
+  useUpdateOperationClient,
   useDeleteOperation,
 } from '../hooks/useOperations'
+import {
+  parseClientData,
+  extractUserNotes,
+} from '../services/operationService'
 
 // ─── Valid status transitions ───────────────────────────────────────────────
 
@@ -76,6 +84,7 @@ export default function OperationDetailPage() {
 
   const { data: operation, isLoading, error } = useOperation(id)
   const updateStatus = useUpdateOperationStatus()
+  const updateClient = useUpdateOperationClient()
   const deleteOp = useDeleteOperation()
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -123,6 +132,17 @@ export default function OperationDetailPage() {
     if (!id) return
     await deleteOp.mutateAsync(id)
     navigate('/operations')
+  }
+
+  const clientData = parseClientData(operation.notes)
+  const userNotes = extractUserNotes(operation.notes)
+
+  async function toggleClientPaid() {
+    if (!id || !clientData) return
+    await updateClient.mutateAsync({
+      id,
+      clientData: { ...clientData, client_paid: !clientData.client_paid },
+    })
   }
 
   return (
@@ -189,6 +209,48 @@ export default function OperationDetailPage() {
         )}
       </div>
 
+      {/* ─── Client info card ───────────────────────────────────────── */}
+      {clientData && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="size-5" />
+              Dados do Cliente
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Nome do Cliente</p>
+                <p className="text-sm font-medium">{clientData.client_name}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Pagamento do Cliente</p>
+                <div className="flex items-center gap-2">
+                  {clientData.client_paid ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      <CheckCircle2 className="size-4" /> Pago
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      <Clock className="size-4" /> Pendente
+                    </span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleClientPaid}
+                    disabled={updateClient.isPending}
+                  >
+                    {clientData.client_paid ? 'Marcar como Pendente' : 'Marcar como Pago'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ─── Basic info card ─────────────────────────────────────────── */}
       <Card>
         <CardHeader>
@@ -228,10 +290,10 @@ export default function OperationDetailPage() {
               value={formatCurrency(operation.commission_total)}
               highlight
             />
-            {operation.notes && (
+            {userNotes && (
               <div className="col-span-full">
                 <p className="text-xs text-muted-foreground">Notas</p>
-                <p className="text-sm">{operation.notes}</p>
+                <p className="text-sm">{userNotes}</p>
               </div>
             )}
           </div>

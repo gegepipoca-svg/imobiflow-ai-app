@@ -75,6 +75,7 @@ import type {
 import { getCommissionRules } from '@/features/commission-rules/services/commissionRuleService'
 import { getParticipants } from '@/features/participants/services/participantService'
 import { useCreateOperation } from '../hooks/useOperations'
+import { buildNotesWithClient } from '../services/operationService'
 import {
   simulateCommission,
   calculateCommissionTotal,
@@ -87,6 +88,7 @@ import {
 const operationFormSchema = z.object({
   code: z.string().min(1, 'Codigo e obrigatorio'),
   description: z.string().optional(),
+  client_name: z.string().optional(),
   operation_date: z.string().min(1, 'Data da operacao e obrigatoria'),
   product_type: z.enum(['imovel', 'auto', 'servico', 'outros'], {
     message: 'Tipo de produto e obrigatorio',
@@ -153,6 +155,7 @@ export default function OperationFormPage() {
     defaultValues: {
       code: generateOperationCode(),
       description: '',
+      client_name: '',
       operation_date: new Date().toISOString().split('T')[0],
       product_type: undefined,
       commission_rule_id: '',
@@ -260,6 +263,11 @@ export default function OperationFormPage() {
       return
     }
 
+    const clientData = values.client_name?.trim()
+      ? { client_name: values.client_name.trim(), client_paid: false }
+      : null
+    const finalNotes = buildNotesWithClient(clientData, values.notes || '') || null
+
     await createOperation.mutateAsync({
       code: values.code,
       credit_value: values.credit_value,
@@ -267,7 +275,7 @@ export default function OperationFormPage() {
       product_type: values.product_type,
       commission_rule_id: values.commission_rule_id || null,
       operation_date: values.operation_date,
-      notes: values.notes || null,
+      notes: finalNotes,
       status: 'draft',
       participants: values.participants.map((p) => ({
         participant_id: p.participant_id,
@@ -458,6 +466,16 @@ export default function OperationFormPage() {
                   </p>
                 )}
               </div>
+            </div>
+
+            {/* Nome do Cliente */}
+            <div className="space-y-2">
+              <Label htmlFor="client_name">Nome do Cliente</Label>
+              <Input
+                id="client_name"
+                {...register('client_name')}
+                placeholder="Nome do cliente da operação"
+              />
             </div>
 
             {/* Descricao */}
