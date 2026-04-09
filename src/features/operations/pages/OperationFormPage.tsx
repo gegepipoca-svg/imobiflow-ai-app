@@ -737,31 +737,65 @@ export default function OperationFormPage() {
           </Card>
         )}
 
-        {/* ─── Submit ────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-end gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/operations')}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            disabled={
-              isSubmitting ||
-              createOperation.isPending ||
-              !shareValidation.valid ||
-              installmentDefs.length === 0
-            }
-          >
-            {(isSubmitting || createOperation.isPending) && (
-              <Loader2 className="size-4 animate-spin" />
-            )}
-            {isEditing ? 'Salvar Alteracoes' : 'Criar Operacao'}
-          </Button>
-        </div>
+        {/* ─── Checklist + Submit ──────────────────────────────────── */}
+        <Card>
+          <CardContent className="pt-6">
+            {/* Checklist */}
+            <div className="mb-4 space-y-2">
+              <p className="text-sm font-medium text-muted-foreground mb-3">Checklist para criar:</p>
+              <ChecklistItem ok={!!watchedProductType} label="Tipo de produto selecionado" />
+              <ChecklistItem ok={installmentDefs.length > 0} label="Regra de comissão selecionada" />
+              <ChecklistItem ok={watchedCreditValue > 0} label="Valor do crédito preenchido" />
+              <ChecklistItem ok={watchedCommissionModel > 0} label="Modelo de comissão definido" />
+              <ChecklistItem ok={(watchedParticipants?.length ?? 0) > 0} label="Pelo menos um participante adicionado" />
+              <ChecklistItem ok={shareValidation.valid} label="Participações somam 100%" />
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate('/operations')}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  isSubmitting ||
+                  createOperation.isPending ||
+                  !shareValidation.valid ||
+                  installmentDefs.length === 0
+                }
+              >
+                {(isSubmitting || createOperation.isPending) && (
+                  <Loader2 className="size-4 animate-spin" />
+                )}
+                {isEditing ? 'Salvar Alterações' : 'Criar Operação'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </form>
+    </div>
+  )
+}
+
+// ─── Checklist Item ────────────────────────────────────────────────────────
+
+function ChecklistItem({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
+        ok
+          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+          : 'bg-muted text-muted-foreground'
+      }`}>
+        {ok ? <Check className="size-3" /> : <span className="text-[10px]">-</span>}
+      </div>
+      <span className={`text-sm ${ok ? 'text-foreground' : 'text-muted-foreground'}`}>
+        {label}
+      </span>
     </div>
   )
 }
