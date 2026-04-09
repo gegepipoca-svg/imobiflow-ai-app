@@ -25,6 +25,8 @@ import {
   AlertCircle,
   Lightbulb,
   ArrowRight,
+  FileBarChart,
+  UserPlus,
 } from "lucide-react";
 
 interface FaqItem {
@@ -115,9 +117,11 @@ export default function HelpPage() {
             steps={[
               "Cadastre os Participantes (consultores, parceiros, escritorios) no menu Participantes",
               "Crie as Regras de Comissao no menu Regras de Comissao (ex: 15% para imoveis, 10% para autos)",
-              "Registre uma Operacao no menu Operacoes, vinculando participantes e regra de comissao",
+              "Registre uma Operacao no menu Operacoes, vinculando participantes, regra de comissao e o nome do cliente",
               "Acompanhe as comissoes geradas no Dashboard",
+              "Quando o cliente pagar, marque como 'Pago' na pagina da operacao — isso libera a comissao do consultor",
               "Registre pagamentos no menu Pagamentos conforme forem realizados",
+              "Use Relatorios para filtrar e exportar comissoes em CSV",
             ]}
           />
           <Tip>
@@ -151,6 +155,14 @@ export default function HelpPage() {
           <TabsTrigger value="simulation" className="gap-1.5">
             <Calculator className="h-4 w-4" />
             Simulacao
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="gap-1.5">
+            <FileBarChart className="h-4 w-4" />
+            Relatorios
+          </TabsTrigger>
+          <TabsTrigger value="users" className="gap-1.5">
+            <UserPlus className="h-4 w-4" />
+            Usuarios
           </TabsTrigger>
           <TabsTrigger value="faq" className="gap-1.5">
             <HelpCircle className="h-4 w-4" />
@@ -239,11 +251,29 @@ export default function HelpPage() {
                   "Preencha o codigo (gerado automaticamente), data e tipo de produto (Imovel, Automovel, Servico ou Outros)",
                   "Selecione uma Regra de Comissao — ela preenche automaticamente o percentual e as parcelas",
                   "Informe o Valor do Credito — a comissao total e calculada em tempo real",
+                  "Preencha o Nome do Cliente vinculado a esta operacao",
                   "Adicione os Participantes com seus percentuais de participacao (devem somar 100%)",
                   "Confira o Preview da Comissao com a matriz de distribuicao antes de salvar",
                   "Clique em 'Criar Operacao'",
                 ]}
               />
+
+              <Separator />
+
+              <h4 className="font-semibold">Controle de pagamento do cliente</h4>
+              <p className="text-sm text-muted-foreground">
+                Cada operacao pode ter um cliente vinculado. Na lista de operacoes, voce ve o nome do cliente e se ele ja pagou ou esta pendente. Na pagina de detalhes da operacao, use o botao para alternar entre "Pago" e "Pendente".
+              </p>
+              <ul className="space-y-1 text-sm text-muted-foreground mt-2">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600 mt-0.5" />
+                  <span><strong>Pago:</strong> O cliente pagou — a comissao do consultor pode ser liberada</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                  <span><strong>Pendente:</strong> Aguardando pagamento do cliente — comissao em aberto</span>
+                </li>
+              </ul>
 
               <Separator />
 
@@ -467,6 +497,100 @@ export default function HelpPage() {
           </Card>
         </TabsContent>
 
+        {/* RELATORIOS */}
+        <TabsContent value="reports">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileBarChart className="h-5 w-5" />
+                Relatorios
+              </CardTitle>
+              <CardDescription>
+                Filtre, visualize e exporte dados de comissoes
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <h4 className="font-semibold">Filtros disponiveis</h4>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border p-3">
+                  <p className="font-medium text-sm">Busca por texto</p>
+                  <p className="text-xs text-muted-foreground">Pesquise por nome do participante, codigo da operacao ou notas</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="font-medium text-sm">Por consultor</p>
+                  <p className="text-xs text-muted-foreground">Selecione um participante especifico (somente admin)</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="font-medium text-sm">Por status</p>
+                  <p className="text-xs text-muted-foreground">Pendente, Parcial, Pago ou Estornado</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="font-medium text-sm">Por periodo</p>
+                  <p className="text-xs text-muted-foreground">Data inicial e final para filtrar por vencimento</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <h4 className="font-semibold">Exportar CSV</h4>
+              <p className="text-sm text-muted-foreground">
+                Clique no botao "Exportar CSV" para baixar os dados filtrados. O arquivo abre direto no Excel com formatacao brasileira (separador ponto-e-virgula, valores em Real, encoding UTF-8).
+              </p>
+
+              <Tip>
+                O consultor ve apenas seu proprio relatorio. O administrador pode filtrar por qualquer participante.
+              </Tip>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* USUARIOS */}
+        <TabsContent value="users">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5" />
+                Gerenciar Usuarios
+              </CardTitle>
+              <CardDescription>
+                Crie contas para consultores acessarem o sistema (somente admin)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <h4 className="font-semibold">Como criar um usuario</h4>
+              <StepGuide
+                steps={[
+                  "Va no menu 'Gerenciar Usuarios'",
+                  "Clique em '+ Novo Usuario'",
+                  "Preencha o nome completo e e-mail do consultor",
+                  "Defina uma senha (ou use a gerada automaticamente)",
+                  "Selecione a funcao: Admin ou Consultor",
+                  "Clique em 'Criar Usuario'",
+                  "Copie as credenciais clicando em 'Copiar para WhatsApp' e envie ao consultor",
+                ]}
+              />
+
+              <Separator />
+
+              <h4 className="font-semibold">Funcoes</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                  <span><strong>Administrador:</strong> Acesso total ao sistema — cria operacoes, gerencia participantes, regras, pagamentos, relatorios e usuarios</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                  <span><strong>Consultor:</strong> Ve apenas suas proprias operacoes, comissoes e relatorio. Ideal para o consultor acompanhar o que tem a receber</span>
+                </li>
+              </ul>
+
+              <Tip>
+                O consultor e vinculado automaticamente ao participante pelo e-mail. Certifique-se de que o e-mail do usuario seja o mesmo cadastrado no participante.
+              </Tip>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* FAQ */}
         <TabsContent value="faq">
           <Card>
@@ -508,12 +632,24 @@ export default function HelpPage() {
                     answer: "Sao categorias para organizar os participantes:\n\n- Consultor: Vendedor direto que realiza a operacao\n- Parceiro: Parceiro comercial que indica ou apoia\n- Escritorio: Empresa/imobiliaria que gerencia consultores\n- Intermediario: Facilitador entre as partes\n\nVoce pode usar a hierarquia (Participante Pai) para organizar consultores dentro de escritorios.",
                   },
                   {
+                    question: "Para que serve o campo 'Nome do Cliente' na operacao?",
+                    answer: "O campo 'Nome do Cliente' vincula a operacao ao cliente final. Na lista de operacoes, voce ve o nome do cliente e se ele ja pagou ou nao. Na pagina de detalhes, voce pode marcar o cliente como 'Pago' ou 'Pendente'. Quando o cliente paga, isso indica que a comissao do consultor pode ser liberada.",
+                  },
+                  {
+                    question: "Como marco que o cliente pagou?",
+                    answer: "Abra a operacao clicando em 'Ver'. No card 'Dados do Cliente', clique no botao 'Marcar como Pago'. Para reverter, clique em 'Marcar como Pendente'. O status aparece na lista de operacoes como badge verde (Pago) ou amarelo (Pendente).",
+                  },
+                  {
                     question: "Como exportar dados do sistema?",
-                    answer: "Atualmente o sistema nao possui funcao de exportacao. Esta funcionalidade sera adicionada em versoes futuras.",
+                    answer: "Va no menu Relatorios. La voce pode filtrar por consultor, periodo, status de pagamento e texto livre. Depois de aplicar os filtros, clique no botao 'Exportar CSV' para baixar o relatorio. O arquivo abre direto no Excel com formatacao brasileira (separador ponto-e-virgula, valores em Real).",
                   },
                   {
                     question: "Quem pode acessar o sistema?",
-                    answer: "O acesso e controlado por funcoes:\n\n- Administrador: Acesso total, incluindo gerenciamento de usuarios\n- Gerente: Acesso a operacoes, participantes e pagamentos\n- Consultor/Parceiro: Acesso limitado (funcionalidade em desenvolvimento)",
+                    answer: "O acesso e controlado por duas funcoes:\n\n- Administrador: Acesso total — operacoes, participantes, regras, pagamentos, relatorios, gerenciamento de usuarios e configuracoes.\n\n- Consultor: Acesso limitado — ve apenas suas proprias operacoes, comissoes e relatorio. Nao pode criar operacoes nem gerenciar participantes.\n\nO administrador cria contas de consultor no menu 'Gerenciar Usuarios' e envia as credenciais por WhatsApp.",
+                  },
+                  {
+                    question: "Como crio uma conta para um consultor?",
+                    answer: "Va no menu 'Gerenciar Usuarios' (disponivel apenas para administradores). Clique em '+ Novo Usuario', preencha o nome, e-mail e senha, selecione a funcao 'Consultor' e clique em 'Criar'. O sistema mostra as credenciais com um botao 'Copiar para WhatsApp' para enviar facilmente ao consultor.",
                   },
                   {
                     question: "Como altero minha senha?",
