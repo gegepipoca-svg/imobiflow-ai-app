@@ -8,6 +8,7 @@ import type {
   OperationParticipant,
   Participant,
 } from '@/shared/types'
+import { generateInstallments } from './calculationEngine'
 
 // ─── Client metadata stored in notes field as JSON prefix ──────────────────
 
@@ -209,26 +210,115 @@ export async function getOperation(id: string): Promise<OperationDetail> {
 }
 
 /**
- * Create an operation with all related data via Supabase RPC.
+ * Create an operation with all related data via direct inserts.
+ * Does: operations → operation_participants → commission_installments → commission_distributions
  */
 export async function createOperation(
   payload: CreateOperationPayload,
 ): Promise<Operation> {
-  const { data, error } = await supabase.rpc('create_operation_with_distributions', {
-    p_code: payload.code,
-    p_credit_value: payload.credit_value,
-    p_commission_model: payload.commission_model,
-    p_product_type: payload.product_type,
-    p_commission_rule_id: payload.commission_rule_id,
-    p_operation_date: payload.operation_date,
-    p_notes: payload.notes,
-    p_status: payload.status,
-    p_participants: payload.participants,
-    p_installment_definitions: payload.installment_definitions,
-  })
+  // 1. Insert operation
+  const { data: operation, error: opError } = await supabase
+    .from('operations')
+    .insert({
+      code: payload.code,
+      credit_value: payload.credit_value,
+      commission_model: payload.commission_model,
+      product_type: payload.product_type,
+      commission_rule_id: payload.commission_rule_id,
+      operation_date: payload.operation_date,
+      notes: payload.notes,
+      status: payload.status,
+    })
+    .select()
+    .single()
 
-  if (error) throw error
-  return data as Operation
+  if (opError) throw opError
+  const operationId = operation.id as string
+
+  try {
+    // 2. Insert participants
+    if (payload.participants.length > 0) {
+      const { error: partError } = await supabase
+        .from('operation_participants')
+        .insert(
+          payload.participants.map((p) => ({
+            operation_id: operationId,
+            participant_id: p.participant_id,
+            percentage_share: p.percentage_share,
+            role_in_operation: p.role_in_operation,
+          })),
+        )
+
+      if (partError) throw partError
+    }
+
+    // 3. Generate and insert installments
+    const generatedInstallments = generateInstallments(
+      payload.credit_value,
+      payload.installment_definitions,
+    )
+
+    // Apply commission_model to get the actual installment amount
+    // The generateInstallments multiplies credit_value by percentage_of_credit,
+    // but the commission installment amount should be credit * commission_model * percentage_of_credit
+    const installmentRows = generatedInstallments.map((inst) => ({
+      operation_id: operationId,
+      installment_number: inst.installment_number,
+      percentage_of_credit: inst.percentage_of_credit,
+      amount:
+        Math.round(
+          payload.credit_value *
+            payload.commission_model *
+            inst.percentage_of_credit *
+            100,
+        ) / 100,
+      due_date: inst.due_date,
+      status: 'pending' as const,
+    }))
+
+    const { data: insertedInstallments, error: instError } = await supabase
+      .from('commission_installments')
+      .insert(installmentRows)
+      .select()
+
+    if (instError) throw instError
+
+    // 4. Generate and insert distributions (installment × participant)
+    const distributionRows: Array<{
+      installment_id: string
+      participant_id: string
+      amount: number
+      status: 'pending'
+    }> = []
+
+    for (const inst of insertedInstallments ?? []) {
+      for (const p of payload.participants) {
+        distributionRows.push({
+          installment_id: inst.id as string,
+          participant_id: p.participant_id,
+          amount:
+            Math.round(
+              (inst.amount as number) * p.percentage_share * 100,
+            ) / 100,
+          status: 'pending',
+        })
+      }
+    }
+
+    if (distributionRows.length > 0) {
+      const { error: distError } = await supabase
+        .from('commission_distributions')
+        .insert(distributionRows)
+
+      if (distError) throw distError
+    }
+
+    return operation as Operation
+  } catch (err) {
+    // Rollback: delete the operation and cascade-delete related rows
+    await supabase.from('operations').delete().eq('id', operationId)
+    throw err
+  }
 }
 
 /**
