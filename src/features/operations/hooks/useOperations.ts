@@ -6,6 +6,7 @@ import {
   createOperation,
   updateOperationStatus,
   updateOperationClient,
+  updateInstallmentDueDate,
   deleteOperation,
   type CreateOperationPayload,
   type OperationClientData,
@@ -76,6 +77,24 @@ export function useUpdateOperationClient() {
     },
     onError: (error: Error) => {
       toast.error('Erro ao atualizar dados do cliente.', {
+        description: error.message,
+      })
+    },
+  })
+}
+
+export function useUpdateInstallmentDueDate() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ installmentId, dueDate }: { installmentId: string; dueDate: string }) =>
+      updateInstallmentDueDate(installmentId, dueDate),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OPERATIONS_KEY })
+      toast.success('Data de pagamento atualizada.')
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao atualizar data de pagamento.', {
         description: error.message,
       })
     },

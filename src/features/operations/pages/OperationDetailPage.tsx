@@ -55,10 +55,12 @@ import {
 } from '@/shared/utils/constants'
 import type { OperationStatus, ProductType, ParticipantType } from '@/shared/types'
 
+import { Input } from '@/components/ui/input'
 import {
   useOperation,
   useUpdateOperationStatus,
   useUpdateOperationClient,
+  useUpdateInstallmentDueDate,
   useDeleteOperation,
 } from '../hooks/useOperations'
 import {
@@ -85,6 +87,7 @@ export default function OperationDetailPage() {
   const { data: operation, isLoading, error } = useOperation(id)
   const updateStatus = useUpdateOperationStatus()
   const updateClient = useUpdateOperationClient()
+  const updateDueDate = useUpdateInstallmentDueDate()
   const deleteOp = useDeleteOperation()
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -368,7 +371,7 @@ export default function OperationDetailPage() {
                   <TableHead className="w-16">No.</TableHead>
                   <TableHead>% Credito</TableHead>
                   <TableHead>Valor</TableHead>
-                  <TableHead>Vencimento</TableHead>
+                  <TableHead>Data de Pagamento</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -385,7 +388,21 @@ export default function OperationDetailPage() {
                       <CurrencyDisplay value={inst.amount} />
                     </TableCell>
                     <TableCell>
-                      {inst.due_date ? formatDate(inst.due_date) : '-'}
+                      <Input
+                        type="date"
+                        value={inst.due_date ?? ''}
+                        disabled={updateDueDate.isPending}
+                        onChange={(e) => {
+                          const newDate = e.target.value
+                          if (newDate && newDate !== inst.due_date) {
+                            updateDueDate.mutate({
+                              installmentId: inst.id,
+                              dueDate: newDate,
+                            })
+                          }
+                        }}
+                        className="h-8 w-[160px]"
+                      />
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={inst.status} type="installment" />

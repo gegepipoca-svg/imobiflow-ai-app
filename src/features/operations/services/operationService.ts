@@ -277,6 +277,21 @@ export async function updateOperationClient(
 }
 
 /**
+ * Update the due date (payment date) of a specific installment.
+ */
+export async function updateInstallmentDueDate(
+  installmentId: string,
+  dueDate: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('commission_installments')
+    .update({ due_date: dueDate })
+    .eq('id', installmentId)
+
+  if (error) throw error
+}
+
+/**
  * Delete an operation (only drafts).
  */
 export async function deleteOperation(id: string): Promise<void> {

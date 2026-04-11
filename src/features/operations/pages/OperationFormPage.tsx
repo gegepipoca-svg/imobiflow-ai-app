@@ -537,7 +537,7 @@ export default function OperationFormPage() {
                 onClick={() =>
                   append({
                     participant_id: '',
-                    percentage_share: 0,
+                    percentage_share: fields.length === 0 ? 1 : 0,
                     role_in_operation: '',
                   })
                 }
@@ -645,6 +645,9 @@ export default function OperationFormPage() {
               {/* Installments table */}
               <div>
                 <h4 className="mb-3 text-sm font-medium">Parcelas</h4>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  As datas de pagamento podem ser ajustadas na página de detalhes da operação após a criação.
+                </p>
                 <div className="rounded-lg border">
                   <Table>
                     <TableHeader>
@@ -652,7 +655,7 @@ export default function OperationFormPage() {
                         <TableHead className="w-16">No.</TableHead>
                         <TableHead>% Credito</TableHead>
                         <TableHead>Valor</TableHead>
-                        <TableHead>Vencimento</TableHead>
+                        <TableHead>Data de Pagamento</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
