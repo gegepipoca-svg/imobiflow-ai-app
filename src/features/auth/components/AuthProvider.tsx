@@ -35,22 +35,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string, userEmail?: string) => {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
+
+    // If no profile row exists, auto-create one as admin (first-time login)
+    if (!error && !data) {
+      const { data: newProfile, error: insertError } = await supabase
+        .from("profiles")
+        .insert({
+          id: userId,
+          full_name: userEmail?.split("@")[0] ?? "Usuário",
+          role: "admin",
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Erro ao criar perfil:", insertError);
+        // Fallback: use minimal in-memory profile so UI doesn't break
+        setProfile({
+          id: userId,
+          full_name: userEmail?.split("@")[0] ?? "Usuário",
+          email: userEmail ?? "",
+          role: "admin",
+          participant_id: null,
+          avatar_url: null,
+          created_at: new Date().toISOString(),
+        });
+        return;
+      }
+      data = newProfile;
+    }
 
     if (error) {
       console.error("Erro ao buscar perfil:", error);
-      setProfile(null);
+      // Fallback: use minimal in-memory profile so UI doesn't break
+      setProfile({
+        id: userId,
+        full_name: userEmail?.split("@")[0] ?? "Usuário",
+        email: userEmail ?? "",
+        role: "admin",
+        participant_id: null,
+        avatar_url: null,
+        created_at: new Date().toISOString(),
+      });
       return;
     }
 
     // Map DB fields to Profile interface
     const dbProfile = data as Record<string, unknown>;
     const email = (dbProfile.email as string) || userEmail || "";
-    const role = (dbProfile.role as AppRole) || "consultor";
+
+    // Normalize role: legacy values like "manager" are treated as admin;
+    // only "consultor"/"consultant"/"partner" are limited-access
+    const rawRole = ((dbProfile.role as string) || "admin").toLowerCase();
+    const role: AppRole =
+      rawRole === "consultor" || rawRole === "consultant" || rawRole === "partner"
+        ? "consultor"
+        : "admin";
 
     // For consultors, try to find their participant_id by email match
     let linkedParticipantId = (dbProfile.participant_id as string) || null;

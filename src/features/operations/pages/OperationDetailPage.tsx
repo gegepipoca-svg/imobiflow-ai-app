@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
-  Edit,
   Trash2,
   Calendar,
   CreditCard,
@@ -161,22 +160,13 @@ export default function OperationDetailPage() {
               Voltar
             </Button>
             {isDraft && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate(`/operations/${id}/edit`)}
-                >
-                  <Edit className="size-4" />
-                  Editar
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => setDeleteDialogOpen(true)}
-                >
-                  <Trash2 className="size-4" />
-                  Excluir
-                </Button>
-              </>
+              <Button
+                variant="destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="size-4" />
+                Excluir
+              </Button>
             )}
           </div>
         }

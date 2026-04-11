@@ -562,7 +562,7 @@ export default function OperationFormPage() {
                   onClick={() =>
                     append({
                       participant_id: '',
-                      percentage_share: 0,
+                      percentage_share: 1,
                       role_in_operation: '',
                     })
                   }
