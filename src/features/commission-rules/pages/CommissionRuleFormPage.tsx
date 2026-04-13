@@ -180,7 +180,9 @@ export default function CommissionRuleFormPage() {
                       onValueChange={(val) => { if (val) field.onChange(val as ProductType) }}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Selecione..." />
+                        <SelectValue placeholder="Selecione...">
+                          {field.value ? PRODUCT_TYPE_LABELS[field.value as ProductType] : null}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {(

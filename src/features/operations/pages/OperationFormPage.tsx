@@ -362,7 +362,9 @@ export default function OperationFormPage() {
                       onValueChange={field.onChange}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Selecione o tipo" />
+                        <SelectValue placeholder="Selecione o tipo">
+                          {field.value ? PRODUCT_TYPE_LABELS[field.value as ProductType] : null}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {(
@@ -392,32 +394,39 @@ export default function OperationFormPage() {
                 <Controller
                   control={control}
                   name="commission_rule_id"
-                  render={({ field }) => (
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={!watchedProductType || filteredRules.length === 0}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue
-                          placeholder={
-                            !watchedProductType
-                              ? 'Selecione o tipo primeiro'
-                              : filteredRules.length === 0
-                                ? 'Nenhuma regra disponivel'
-                                : 'Selecione a regra'
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {filteredRules.map((rule) => (
-                          <SelectItem key={rule.id} value={rule.id}>
-                            {rule.name} ({formatPercentage(rule.commission_model)})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+                  render={({ field }) => {
+                    const selectedRule = allRules.find((r) => r.id === field.value)
+                    return (
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={!watchedProductType || filteredRules.length === 0}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue
+                            placeholder={
+                              !watchedProductType
+                                ? 'Selecione o tipo primeiro'
+                                : filteredRules.length === 0
+                                  ? 'Nenhuma regra disponivel'
+                                  : 'Selecione a regra'
+                            }
+                          >
+                            {selectedRule
+                              ? `${selectedRule.name} (${formatPercentage(selectedRule.commission_model)})`
+                              : null}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredRules.map((rule) => (
+                            <SelectItem key={rule.id} value={rule.id}>
+                              {rule.name} ({formatPercentage(rule.commission_model)})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )
+                  }}
                 />
               </div>
 

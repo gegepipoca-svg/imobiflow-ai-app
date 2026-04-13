@@ -161,7 +161,9 @@ export default function ParticipantFormPage() {
                   }
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o tipo" />
+                    <SelectValue placeholder="Selecione o tipo">
+                      {watchedType ? PARTICIPANT_TYPE_LABELS[watchedType as ParticipantType] : null}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {(Object.entries(PARTICIPANT_TYPE_LABELS) as [ParticipantType, string][]).map(
@@ -225,7 +227,11 @@ export default function ParticipantFormPage() {
                   }
                 >
                   <SelectTrigger className="w-full" disabled={isLoadingParticipants}>
-                    <SelectValue placeholder="Nenhum (raiz)" />
+                    <SelectValue placeholder="Nenhum (raiz)">
+                      {watchedParentId
+                        ? parentOptions.find((p) => p.id === watchedParentId)?.name ?? null
+                        : null}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Nenhum (raiz)</SelectItem>
