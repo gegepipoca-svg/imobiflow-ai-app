@@ -40,7 +40,7 @@ export async function getDistributionsWithDetails(participantId?: string | null)
       participant:participants(name),
       installment:commission_installments(
         installment_number,
-        amount,
+        value,
         operation_id,
         operation:operations(id, code)
       )
@@ -79,7 +79,7 @@ export async function getDistributionsWithDetails(participantId?: string | null)
       id: d.id,
       installment_id: d.installment_id,
       participant_id: d.participant_id,
-      amount: d.amount,
+      amount: d.value,
       status: d.status as DistributionStatus,
       created_at: d.created_at,
       updated_at: d.updated_at,
@@ -87,9 +87,9 @@ export async function getDistributionsWithDetails(participantId?: string | null)
       operation_id: (operation?.id as string) ?? '',
       operation_code: (operation?.code as string) ?? '',
       installment_number: (installment?.installment_number as number) ?? 0,
-      installment_amount: (installment?.amount as number) ?? 0,
+      installment_amount: (installment?.value as number) ?? 0,
       paid_amount: paidAmount,
-      pending_amount: d.amount - paidAmount,
+      pending_amount: (d.value ?? 0) - paidAmount,
     }
   })
 }
@@ -233,10 +233,10 @@ export async function deletePayment(id: string): Promise<void> {
  * Recalculate and update a distribution's status based on its total paid amount.
  */
 async function updateDistributionStatus(distributionId: string): Promise<void> {
-  // Get the distribution amount
+  // Get the distribution value
   const { data: dist, error: distError } = await supabase
     .from('commission_distributions')
-    .select('amount')
+    .select('value')
     .eq('id', distributionId)
     .single()
 
@@ -251,7 +251,7 @@ async function updateDistributionStatus(distributionId: string): Promise<void> {
   if (payError) throw payError
 
   const totalPaid = (payments ?? []).reduce((sum, p) => sum + p.amount, 0)
-  const totalAmount = dist.amount
+  const totalAmount = dist.value
 
   let newStatus: DistributionStatus
   if (totalPaid <= 0) {

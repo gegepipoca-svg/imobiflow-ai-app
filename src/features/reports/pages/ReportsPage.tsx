@@ -77,7 +77,7 @@ async function fetchReportData(): Promise<ReportRow[]> {
     .select(
       `
       id,
-      amount,
+      value,
       status,
       participant_id,
       participant:participants(id, name, type),
@@ -148,9 +148,9 @@ async function fetchReportData(): Promise<ReportRow[]> {
       productType: installment?.operation?.product_type ?? "",
       creditValue: installment?.operation?.credit_value ?? 0,
       installmentNumber: installment?.installment_number ?? 0,
-      commissionAmount: d.amount,
+      commissionAmount: (d as { value: number }).value ?? 0,
       paidAmount,
-      pendingAmount: d.amount - paidAmount,
+      pendingAmount: ((d as { value: number }).value ?? 0) - paidAmount,
       status: d.status as DistributionStatus,
       lastPaymentDate: payInfo?.lastDate ?? null,
       lastPaymentMethod: payInfo?.lastMethod ?? null,

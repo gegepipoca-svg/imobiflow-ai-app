@@ -76,13 +76,13 @@ export async function getDashboardKpis(participantId?: string | null): Promise<D
 
   const { data: installments, error: instError } = await supabase
     .from('commission_installments')
-    .select('amount, status')
+    .select('value, status')
     .in('status', ['pending', 'partial'])
 
   if (instError) throw instError
 
   const futureLiability = (installments ?? []).reduce(
-    (sum, i) => sum + (i.amount ?? 0),
+    (sum, i) => sum + (i.value ?? 0),
     0,
   )
 
@@ -102,13 +102,13 @@ async function getConsultorKpis(participantId: string): Promise<DashboardKpis> {
   // Get distributions for this participant
   const { data: distributions, error: distError } = await supabase
     .from('commission_distributions')
-    .select('id, amount, status')
+    .select('id, value, status')
     .eq('participant_id', participantId)
 
   if (distError) throw distError
 
   const commissionGenerated = (distributions ?? []).reduce(
-    (sum, d) => sum + (d.amount ?? 0),
+    (sum, d) => sum + (d.value ?? 0),
     0,
   )
 
@@ -165,7 +165,7 @@ export async function getCommissionByParticipant(): Promise<
   const { data, error } = await supabase
     .from('commission_distributions')
     .select(`
-      amount,
+      value,
       participant:participants!participant_id(id, name, type)
     `)
 
@@ -185,9 +185,9 @@ export async function getCommissionByParticipant(): Promise<
     if (!p) continue
     const existing = map.get(p.id)
     if (existing) {
-      existing.total += row.amount ?? 0
+      existing.total += row.value ?? 0
     } else {
-      map.set(p.id, { name: p.name, type: p.type, total: row.amount ?? 0 })
+      map.set(p.id, { name: p.name, type: p.type, total: row.value ?? 0 })
     }
   }
 
@@ -308,7 +308,7 @@ export async function getParticipantRanking(): Promise<
   const { data, error } = await supabase
     .from('commission_distributions')
     .select(`
-      amount,
+      value,
       installment:commission_installments!installment_id(
         operation:operations!operation_id(id)
       ),
@@ -342,7 +342,7 @@ export async function getParticipantRanking(): Promise<
 
     const existing = map.get(p.id)
     if (existing) {
-      existing.totalEarned += row.amount ?? 0
+      existing.totalEarned += row.value ?? 0
       if (opId) existing.operationIds.add(opId)
     } else {
       const operationIds = new Set<string>()
@@ -350,7 +350,7 @@ export async function getParticipantRanking(): Promise<
       map.set(p.id, {
         name: p.name,
         type: p.type,
-        totalEarned: row.amount ?? 0,
+        totalEarned: row.value ?? 0,
         operationIds,
       })
     }
@@ -379,7 +379,7 @@ export async function getFutureFlow(): Promise<FutureFlowItem[]> {
 
   const { data, error } = await supabase
     .from('commission_installments')
-    .select('due_date, amount, status')
+    .select('due_date, value, status')
     .in('status', ['pending', 'partial'])
     .gte('due_date', today)
     .lte('due_date', endDate)
@@ -402,9 +402,9 @@ export async function getFutureFlow(): Promise<FutureFlowItem[]> {
     if (key && monthMap.has(key)) {
       const entry = monthMap.get(key)!
       if (row.status === 'partial') {
-        entry.partial += row.amount ?? 0
+        entry.partial += row.value ?? 0
       } else {
-        entry.pending += row.amount ?? 0
+        entry.pending += row.value ?? 0
       }
     }
   }
