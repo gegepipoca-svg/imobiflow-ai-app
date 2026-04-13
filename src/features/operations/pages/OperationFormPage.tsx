@@ -72,10 +72,10 @@ import type {
   InstallmentDefinition,
 } from '@/shared/types'
 
+import { toast } from 'sonner'
 import { getCommissionRules } from '@/features/commission-rules/services/commissionRuleService'
 import { getParticipants } from '@/features/participants/services/participantService'
 import { useCreateOperation } from '../hooks/useOperations'
-import { buildNotesWithClient } from '../services/operationService'
 import {
   simulateCommission,
   calculateCommissionTotal,
@@ -255,37 +255,42 @@ export default function OperationFormPage() {
 
   // Submit handler
   async function onSubmit(values: OperationFormValues) {
-    // Validate shares before submitting
     const validation = validateParticipantShares(values.participants)
-    if (!validation.valid) return
-
-    if (installmentDefs.length === 0) {
+    if (!validation.valid) {
+      toast.error(validation.message ?? 'Participação inválida')
       return
     }
 
-    const clientData = values.client_name?.trim()
-      ? { client_name: values.client_name.trim(), client_paid: false }
-      : null
-    const finalNotes = buildNotesWithClient(clientData, values.notes || '') || null
+    if (installmentDefs.length === 0) {
+      toast.error('Selecione uma regra de comissão antes de salvar')
+      return
+    }
 
-    await createOperation.mutateAsync({
-      code: values.code,
-      credit_value: values.credit_value,
-      commission_model: values.commission_model,
-      product_type: values.product_type,
-      commission_rule_id: values.commission_rule_id || null,
-      operation_date: values.operation_date,
-      notes: finalNotes,
-      status: 'draft',
-      participants: values.participants.map((p) => ({
-        participant_id: p.participant_id,
-        percentage_share: p.percentage_share,
-        role_in_operation: p.role_in_operation || null,
-      })),
-      installment_definitions: installmentDefs,
-    })
-
-    navigate('/operations')
+    try {
+      await createOperation.mutateAsync({
+        code: values.code,
+        credit_value: values.credit_value,
+        commission_model: values.commission_model,
+        product_type: values.product_type,
+        commission_rule_id: values.commission_rule_id || null,
+        operation_date: values.operation_date,
+        notes: values.notes?.trim() || null,
+        status: 'draft',
+        client_name: values.client_name?.trim() || null,
+        client_paid: false,
+        participants: values.participants.map((p) => ({
+          participant_id: p.participant_id,
+          percentage_share: p.percentage_share,
+          role_in_operation: p.role_in_operation || null,
+        })),
+        installment_definitions: installmentDefs,
+      })
+      toast.success('Operação criada com sucesso')
+      navigate('/operations')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao criar operação'
+      toast.error(msg)
+    }
   }
 
   return (

@@ -211,21 +211,29 @@ function exportToCSV(rows: ReportRow[], filename: string) {
     "Forma Pgto",
   ];
 
-  const csvRows = rows.map((r) => [
-    `"${r.participantName}"`,
-    r.operationCode,
-    r.operationDate ? formatDate(r.operationDate) : "",
-    PRODUCT_LABELS[r.productType] ?? r.productType,
+  // Escape CSV cells: wrap in quotes if contains ; " , or newline; double any embedded quotes
+  const csvCell = (v: unknown): string => {
+    const s = v == null ? "" : String(v);
+    return /[";,\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const csvRows: (string | number)[][] = rows.map((r) => [
+    csvCell(r.participantName),
+    csvCell(r.operationCode),
+    csvCell(r.operationDate ? formatDate(r.operationDate) : ""),
+    csvCell(PRODUCT_LABELS[r.productType] ?? r.productType),
     r.creditValue.toFixed(2).replace(".", ","),
     r.installmentNumber,
     r.commissionAmount.toFixed(2).replace(".", ","),
     r.paidAmount.toFixed(2).replace(".", ","),
     r.pendingAmount.toFixed(2).replace(".", ","),
-    STATUS_LABELS[r.status] ?? r.status,
-    r.lastPaymentDate ? formatDate(r.lastPaymentDate) : "",
-    r.lastPaymentMethod
-      ? METHOD_LABELS[r.lastPaymentMethod] ?? r.lastPaymentMethod
-      : "",
+    csvCell(STATUS_LABELS[r.status] ?? r.status),
+    csvCell(r.lastPaymentDate ? formatDate(r.lastPaymentDate) : ""),
+    csvCell(
+      r.lastPaymentMethod
+        ? METHOD_LABELS[r.lastPaymentMethod] ?? r.lastPaymentMethod
+        : "",
+    ),
   ]);
 
   // Add summary row
@@ -235,7 +243,7 @@ function exportToCSV(rows: ReportRow[], filename: string) {
 
   csvRows.push([]);
   csvRows.push([
-    `"TOTAL (${rows.length} registros)"`,
+    csvCell(`TOTAL (${rows.length} registros)`),
     "",
     "",
     "",
@@ -252,7 +260,7 @@ function exportToCSV(rows: ReportRow[], filename: string) {
   const BOM = "\uFEFF";
   const csv =
     BOM +
-    headers.join(";") +
+    headers.map(csvCell).join(";") +
     "\n" +
     csvRows.map((row) => row.join(";")).join("\n");
 

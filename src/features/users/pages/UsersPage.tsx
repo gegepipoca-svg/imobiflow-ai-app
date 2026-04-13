@@ -11,9 +11,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -30,27 +28,75 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { UserPlus, Shield, User, Copy, Check, Eye, EyeOff } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  UserPlus,
+  Shield,
+  User,
+  Copy,
+  Check,
+  Eye,
+  EyeOff,
+  MoreHorizontal,
+  KeyRound,
+  Ban,
+  Pencil,
+  Loader2,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
+
+type DbRole = "admin" | "manager" | "consultant" | "partner";
 
 interface UserProfile {
   id: string;
   full_name: string;
   email: string;
-  role: string;
-  participant_id: string | null;
+  role: DbRole;
   created_at: string;
+  banned_until?: string | null;
 }
 
-interface Participant {
-  id: string;
-  name: string;
-  type: string;
-  is_active: boolean;
+const ROLE_LABELS: Record<DbRole, string> = {
+  admin: "Administrador",
+  manager: "Gerente",
+  consultant: "Consultor",
+  partner: "Parceiro",
+};
+
+// ─── Edge Function helpers ──────────────────────────────────────────────────
+
+async function callEdgeFunction(fnName: string, body: Record<string, unknown>) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Sessao expirada. Faca login novamente.");
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const response = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.error || `Erro ${response.status}`);
+  }
+  return result;
 }
 
 // ─── Service functions ──────────────────────────────────────────────────────
@@ -65,29 +111,24 @@ async function getUsers(): Promise<UserProfile[]> {
   return (data ?? []) as UserProfile[];
 }
 
-async function getConsultantParticipants(): Promise<Participant[]> {
-  const { data, error } = await supabase
-    .from("participants")
-    .select("id, name, type, is_active")
-    .eq("type", "consultant")
-    .eq("is_active", true)
-    .order("name");
-
-  if (error) throw error;
-  return (data ?? []) as Participant[];
-}
-
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const { user: currentUser } = useAuth();
+
+  // Dialog states
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+
+  // Create form
   const [newUser, setNewUser] = useState({
     full_name: "",
     email: "",
     password: "",
-    role: "consultor" as "admin" | "consultor",
-    participant_id: "",
+    role: "consultant" as DbRole,
   });
   const [createdCredentials, setCreatedCredentials] = useState<{
     email: string;
@@ -95,78 +136,107 @@ export default function UsersPage() {
   } | null>(null);
   const [copied, setCopied] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [creating, setCreating] = useState(false);
+
+  // Edit form
+  const [editRole, setEditRole] = useState<DbRole>("consultant");
+  const [editName, setEditName] = useState("");
+
+  // Reset password form
+  const [resetPassword, setResetPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: getUsers,
   });
 
-  const { data: participants } = useQuery({
-    queryKey: ["consultant-participants"],
-    queryFn: getConsultantParticipants,
-  });
+  // ─── Create user mutation ─────────────────────────────────────────────────
 
-  const handleCreateUser = async () => {
-    setError("");
-    setCreating(true);
-
-    try {
-      // 1. Create auth user via Supabase Auth
-      const { data: authData, error: authError } =
-        await supabase.auth.signUp({
-          email: newUser.email,
-          password: newUser.password,
-          options: {
-            data: {
-              full_name: newUser.full_name,
-              role: newUser.role,
-            },
-          },
-        });
-
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Erro ao criar usuário");
-
-      // 2. Upsert profile with role
-      const profileData: Record<string, unknown> = {
-        id: authData.user.id,
+  const createUserMutation = useMutation({
+    mutationFn: () =>
+      callEdgeFunction("admin-create-user", {
+        email: newUser.email,
+        password: newUser.password,
         full_name: newUser.full_name,
         role: newUser.role,
-      };
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .upsert(profileData);
-
-      if (profileError) throw profileError;
-
-      // 3. Show credentials
+      }),
+    onSuccess: () => {
       setCreatedCredentials({
         email: newUser.email,
         password: newUser.password,
       });
-
-      // Reset form
-      setNewUser({
-        full_name: "",
-        email: "",
-        password: "",
-        role: "consultor",
-        participant_id: "",
-      });
-
+      setNewUser({ full_name: "", email: "", password: "", role: "consultant" });
       queryClient.invalidateQueries({ queryKey: ["users"] });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao criar usuário");
-    } finally {
-      setCreating(false);
-    }
-  };
+      toast.success("Usuário criado com sucesso!");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  // ─── Update role mutation ─────────────────────────────────────────────────
+
+  const updateRoleMutation = useMutation({
+    mutationFn: () =>
+      callEdgeFunction("admin-update-user", {
+        user_id: selectedUser!.id,
+        action: "update_role",
+        role: editRole,
+        full_name: editName || undefined,
+      }),
+    onSuccess: () => {
+      toast.success("Perfil atualizado!");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setEditDialogOpen(false);
+      setSelectedUser(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  // ─── Toggle disable mutation ──────────────────────────────────────────────
+
+  const toggleDisableMutation = useMutation({
+    mutationFn: ({ userId, enable }: { userId: string; enable: boolean }) =>
+      callEdgeFunction("admin-update-user", {
+        user_id: userId,
+        action: enable ? "enable" : "disable",
+      }),
+    onSuccess: (_, { enable }) => {
+      toast.success(enable ? "Usuário reativado!" : "Usuário desativado!");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  // ─── Reset password mutation ──────────────────────────────────────────────
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: () =>
+      callEdgeFunction("admin-update-user", {
+        user_id: selectedUser!.id,
+        action: "reset_password",
+        password: resetPassword,
+      }),
+    onSuccess: () => {
+      toast.success("Senha redefinida!");
+      setResetPasswordDialogOpen(false);
+      setSelectedUser(null);
+      setResetPassword("");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
   const handleCopyCredentials = () => {
     if (!createdCredentials) return;
-    const text = `Acesse o ComissãoPro:\n🔗 https://comissao.consorciosracon.com.br\n📧 Email: ${createdCredentials.email}\n🔑 Senha: ${createdCredentials.password}`;
+    const text = `Acesse o ComissaoPro:\nhttps://comissao.consorciosracon.com.br\nEmail: ${createdCredentials.email}\nSenha: ${createdCredentials.password}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -178,256 +248,52 @@ export default function UsersPage() {
     for (let i = 0; i < 8; i++) {
       pass += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    setNewUser((prev) => ({ ...prev, password: pass }));
+    return pass;
   };
 
-  const getRoleBadge = (role: string) => {
-    if (role === "admin") {
-      return (
-        <Badge variant="default" className="gap-1">
-          <Shield className="h-3 w-3" />
-          Admin
-        </Badge>
-      );
-    }
+  const openEditDialog = (user: UserProfile) => {
+    setSelectedUser(user);
+    setEditRole(user.role);
+    setEditName(user.full_name || "");
+    setEditDialogOpen(true);
+  };
+
+  const openResetPasswordDialog = (user: UserProfile) => {
+    setSelectedUser(user);
+    setResetPassword(generatePassword());
+    setShowResetPassword(true);
+    setResetPasswordDialogOpen(true);
+  };
+
+  const getRoleBadge = (role: DbRole) => {
+    const isAdminRole = role === "admin" || role === "manager";
     return (
-      <Badge variant="secondary" className="gap-1">
-        <User className="h-3 w-3" />
-        Consultor
+      <Badge variant={isAdminRole ? "default" : "secondary"} className="gap-1">
+        {isAdminRole ? <Shield className="h-3 w-3" /> : <User className="h-3 w-3" />}
+        {ROLE_LABELS[role] || role}
       </Badge>
     );
   };
+
+  const isSelf = (userId: string) => currentUser?.id === userId;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Gerenciar Usuários"
-        description="Crie e gerencie acessos de consultores ao sistema"
+        description="Crie e gerencie acessos de consultores e administradores"
       />
 
-      {/* Create User Card */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Usuários do Sistema</CardTitle>
-          <Dialog
-            open={dialogOpen}
-            onOpenChange={(open) => {
-              setDialogOpen(open);
-              if (!open) {
-                setCreatedCredentials(null);
-                setError("");
-              }
-            }}
-          >
-            <DialogTrigger>
-              <Button className="gap-2">
-                <UserPlus className="h-4 w-4" />
-                Novo Usuário
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              {createdCredentials ? (
-                <>
-                  <DialogHeader>
-                    <DialogTitle>Usuário Criado com Sucesso!</DialogTitle>
-                    <DialogDescription>
-                      Envie as credenciais abaixo para o consultor
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-                      <p className="text-sm">
-                        <strong>Link:</strong>{" "}
-                        <span className="text-primary">
-                          https://comissao.consorciosracon.com.br
-                        </span>
-                      </p>
-                      <p className="text-sm">
-                        <strong>Email:</strong> {createdCredentials.email}
-                      </p>
-                      <p className="text-sm">
-                        <strong>Senha:</strong> {createdCredentials.password}
-                      </p>
-                    </div>
-                    <Button
-                      onClick={handleCopyCredentials}
-                      variant="outline"
-                      className="w-full gap-2"
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="h-4 w-4" />
-                          Copiado!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4" />
-                          Copiar para enviar via WhatsApp
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <DialogFooter>
-                    <DialogClose>
-                      <Button>Fechar</Button>
-                    </DialogClose>
-                  </DialogFooter>
-                </>
-              ) : (
-                <>
-                  <DialogHeader>
-                    <DialogTitle>Criar Novo Usuário</DialogTitle>
-                    <DialogDescription>
-                      Crie um acesso para um consultor ou administrador
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="full_name">Nome Completo</Label>
-                      <Input
-                        id="full_name"
-                        placeholder="Ex: João Silva"
-                        value={newUser.full_name}
-                        onChange={(e) =>
-                          setNewUser((prev) => ({
-                            ...prev,
-                            full_name: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="consultor@email.com"
-                        value={newUser.email}
-                        onChange={(e) =>
-                          setNewUser((prev) => ({
-                            ...prev,
-                            email: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Senha</Label>
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <Input
-                            id="password"
-                            type={showPassword ? "text" : "password"}
-                            placeholder="Mínimo 6 caracteres"
-                            value={newUser.password}
-                            onChange={(e) =>
-                              setNewUser((prev) => ({
-                                ...prev,
-                                password: e.target.value,
-                              }))
-                            }
-                          />
-                          <button
-                            type="button"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                            onClick={() => setShowPassword(!showPassword)}
-                          >
-                            {showPassword ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={generatePassword}
-                        >
-                          Gerar
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="role">Perfil de Acesso</Label>
-                      <Select
-                        value={newUser.role}
-                        onValueChange={(v) =>
-                          setNewUser((prev) => ({
-                            ...prev,
-                            role: v as "admin" | "consultor",
-                          }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="consultor">
-                            Consultor — vê só as próprias operações
-                          </SelectItem>
-                          <SelectItem value="admin">
-                            Administrador — acesso total
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {newUser.role === "consultor" && (
-                      <div className="space-y-2">
-                        <Label htmlFor="participant">
-                          Vincular a Participante
-                        </Label>
-                        <Select
-                          value={newUser.participant_id}
-                          onValueChange={(v) =>
-                            setNewUser((prev) => ({
-                              ...prev,
-                              participant_id: v ?? "",
-                            }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o participante..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(participants ?? []).map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          Vincule a um participante para ele ver apenas as
-                          operações e comissões dele
-                        </p>
-                      </div>
-                    )}
-                    {error && (
-                      <p className="text-sm text-destructive">{error}</p>
-                    )}
-                  </div>
-                  <DialogFooter>
-                    <DialogClose>
-                      <Button variant="outline">Cancelar</Button>
-                    </DialogClose>
-                    <Button
-                      onClick={handleCreateUser}
-                      disabled={
-                        creating ||
-                        !newUser.full_name ||
-                        !newUser.email ||
-                        !newUser.password
-                      }
-                    >
-                      {creating ? "Criando..." : "Criar Usuário"}
-                    </Button>
-                  </DialogFooter>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
+          <Button className="gap-2" onClick={() => {
+            setCreatedCredentials(null);
+            setCreateDialogOpen(true);
+          }}>
+            <UserPlus className="h-4 w-4" />
+            Novo Usuário
+          </Button>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -444,25 +310,63 @@ export default function UsersPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Perfil</TableHead>
                   <TableHead>Criado em</TableHead>
+                  <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(users ?? []).map((u) => (
-                  <TableRow key={u.id}>
+                  <TableRow key={u.id} className={isSelf(u.id) ? "bg-muted/30" : ""}>
                     <TableCell className="font-medium">
                       {u.full_name || "—"}
+                      {isSelf(u.id) && (
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          Eu
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>{u.email || "—"}</TableCell>
                     <TableCell>{getRoleBadge(u.role)}</TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="text-muted-foreground tabular-nums">
                       {new Date(u.created_at).toLocaleDateString("pt-BR")}
+                    </TableCell>
+                    <TableCell>
+                      {!isSelf(u.id) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditDialog(u)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Editar perfil
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openResetPasswordDialog(u)}>
+                              <KeyRound className="mr-2 h-4 w-4" />
+                              Redefinir senha
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() =>
+                                toggleDisableMutation.mutate({
+                                  userId: u.id,
+                                  enable: false,
+                                })
+                              }
+                            >
+                              <Ban className="mr-2 h-4 w-4" />
+                              Desativar acesso
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
                 {(users ?? []).length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="text-center text-muted-foreground py-8"
                     >
                       Nenhum usuário cadastrado
@@ -474,6 +378,347 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ─── Create User Dialog ──────────────────────────────────────────────── */}
+      <Dialog
+        open={createDialogOpen}
+        onOpenChange={(open) => {
+          setCreateDialogOpen(open);
+          if (!open) {
+            setCreatedCredentials(null);
+            setShowPassword(false);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          {createdCredentials ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Usuário Criado!</DialogTitle>
+                <DialogDescription>
+                  Envie as credenciais para o consultor
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+                  <p className="text-sm">
+                    <strong>Link:</strong>{" "}
+                    <span className="text-primary">
+                      https://comissao.consorciosracon.com.br
+                    </span>
+                  </p>
+                  <p className="text-sm">
+                    <strong>Email:</strong> {createdCredentials.email}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Senha:</strong> {createdCredentials.password}
+                  </p>
+                </div>
+                <Button
+                  onClick={handleCopyCredentials}
+                  variant="outline"
+                  className="w-full gap-2"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Copiado!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4" />
+                      Copiar para enviar via WhatsApp
+                    </>
+                  )}
+                </Button>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setCreateDialogOpen(false)}>
+                  Fechar
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Criar Novo Usuário</DialogTitle>
+                <DialogDescription>
+                  Crie um acesso para um consultor ou administrador
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="full_name">Nome Completo</Label>
+                  <Input
+                    id="full_name"
+                    placeholder="Ex: João Silva"
+                    value={newUser.full_name}
+                    onChange={(e) =>
+                      setNewUser((prev) => ({
+                        ...prev,
+                        full_name: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="consultor@email.com"
+                    value={newUser.email}
+                    onChange={(e) =>
+                      setNewUser((prev) => ({
+                        ...prev,
+                        email: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Senha</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Mínimo 6 caracteres"
+                        value={newUser.password}
+                        onChange={(e) =>
+                          setNewUser((prev) => ({
+                            ...prev,
+                            password: e.target.value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setNewUser((prev) => ({
+                          ...prev,
+                          password: generatePassword(),
+                        }))
+                      }
+                    >
+                      Gerar
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">Perfil de Acesso</Label>
+                  <Select
+                    value={newUser.role}
+                    onValueChange={(v) =>
+                      setNewUser((prev) => ({
+                        ...prev,
+                        role: v as DbRole,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="consultant">
+                        Consultor — vê só as próprias operações
+                      </SelectItem>
+                      <SelectItem value="partner">
+                        Parceiro — vê só as próprias operações
+                      </SelectItem>
+                      <SelectItem value="manager">
+                        Gerente — acesso administrativo
+                      </SelectItem>
+                      <SelectItem value="admin">
+                        Administrador — acesso total
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setCreateDialogOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => createUserMutation.mutate()}
+                  disabled={
+                    createUserMutation.isPending ||
+                    !newUser.full_name.trim() ||
+                    !newUser.email.trim() ||
+                    !newUser.password ||
+                    newUser.password.length < 6
+                  }
+                >
+                  {createUserMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    "Criar Usuário"
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Edit User Dialog ────────────────────────────────────────────────── */}
+      <Dialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) setSelectedUser(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+            <DialogDescription>
+              Altere o nome ou perfil de{" "}
+              <span className="font-medium">
+                {selectedUser?.full_name || selectedUser?.email}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nome Completo</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Nome completo"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Perfil de Acesso</Label>
+              <Select
+                value={editRole}
+                onValueChange={(v) => setEditRole(v as DbRole)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => updateRoleMutation.mutate()}
+              disabled={updateRoleMutation.isPending}
+            >
+              {updateRoleMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Reset Password Dialog ───────────────────────────────────────────── */}
+      <Dialog
+        open={resetPasswordDialogOpen}
+        onOpenChange={(open) => {
+          setResetPasswordDialogOpen(open);
+          if (!open) {
+            setSelectedUser(null);
+            setResetPassword("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Redefinir Senha</DialogTitle>
+            <DialogDescription>
+              Nova senha para{" "}
+              <span className="font-medium">
+                {selectedUser?.full_name || selectedUser?.email}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nova Senha</Label>
+              <div className="relative">
+                <Input
+                  type={showResetPassword ? "text" : "password"}
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowResetPassword(!showResetPassword)}
+                >
+                  {showResetPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setResetPassword(generatePassword())}
+            >
+              Gerar senha
+            </Button>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setResetPasswordDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => resetPasswordMutation.mutate()}
+              disabled={
+                resetPasswordMutation.isPending || resetPassword.length < 6
+              }
+            >
+              {resetPasswordMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Redefinir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

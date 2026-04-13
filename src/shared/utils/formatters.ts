@@ -1,12 +1,9 @@
+import { parse, format as dfFormat, isValid } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+
 const brlFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
-})
-
-const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
 })
 
 /**
@@ -26,12 +23,22 @@ export function formatPercentage(value: number): string {
 }
 
 /**
- * Format a date string or Date object to pt-BR format.
- * @example formatDate("2024-03-15") => "15/03/2024"
+ * Format a date to pt-BR (dd/MM/yyyy).
+ *
+ * Date-only strings (yyyy-MM-dd) are parsed as LOCAL dates to avoid the
+ * UTC-midnight bug where BRT users see the day one off. ISO timestamps with
+ * time are parsed normally.
  */
 export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return dateFormatter.format(d)
+  if (typeof date === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const parsed = parse(date, 'yyyy-MM-dd', new Date())
+      return isValid(parsed) ? dfFormat(parsed, 'dd/MM/yyyy', { locale: ptBR }) : date
+    }
+    const d = new Date(date)
+    return isValid(d) ? dfFormat(d, 'dd/MM/yyyy', { locale: ptBR }) : date
+  }
+  return dfFormat(date, 'dd/MM/yyyy', { locale: ptBR })
 }
 
 /**

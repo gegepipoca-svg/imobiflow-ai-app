@@ -61,7 +61,7 @@ export function AppRoutes() {
               {/* Admin only */}
               <Route element={<RoleGuard allowedRoles={["admin"]} />}>
                 <Route path="operations/new" element={<OperationFormPage />} />
-                <Route path="operations/:id/edit" element={<OperationFormPage />} />
+                {/* operations/:id/edit removido — update completo ainda não implementado */}
                 <Route path="participants">
                   <Route index element={<ParticipantsListPage />} />
                   <Route path="new" element={<ParticipantFormPage />} />

@@ -8,6 +8,7 @@ import {
   updateOperationClient,
   updateInstallmentDueDate,
   deleteOperation,
+  reverseOperation,
   type CreateOperationPayload,
   type OperationClientData,
 } from '../services/operationService'
@@ -112,6 +113,23 @@ export function useDeleteOperation() {
     },
     onError: (error: Error) => {
       toast.error('Erro ao excluir operação.', {
+        description: error.message,
+      })
+    },
+  })
+}
+
+export function useReverseOperation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => reverseOperation(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OPERATIONS_KEY })
+      toast.success('Operação estornada. Parcelas e distribuições zeradas.')
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao estornar operação.', {
         description: error.message,
       })
     },

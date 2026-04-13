@@ -8,56 +8,20 @@ import type {
   OperationParticipant,
   Participant,
 } from '@/shared/types'
-import { generateInstallments } from './calculationEngine'
 
-// ─── Client metadata stored in notes field as JSON prefix ──────────────────
+// ─── Client metadata (now stored in real columns: client_name, client_paid) ─
 
 export interface OperationClientData {
   client_name: string
   client_paid: boolean
 }
 
-export function parseClientData(notes: string | null): OperationClientData | null {
-  if (!notes) return null
-  try {
-    if (notes.startsWith('{"client_')) {
-      const endIdx = notes.indexOf('}') + 1
-      return JSON.parse(notes.slice(0, endIdx)) as OperationClientData
-    }
-  } catch { /* ignore parse errors */ }
-  return null
-}
-
-export function extractUserNotes(notes: string | null): string {
-  if (!notes) return ''
-  if (notes.startsWith('{"client_')) {
-    const endIdx = notes.indexOf('}') + 1
-    return notes.slice(endIdx).trim()
-  }
-  return notes
-}
-
-export function buildNotesWithClient(
-  clientData: OperationClientData | null,
-  userNotes: string,
-): string {
-  const parts: string[] = []
-  if (clientData) {
-    parts.push(JSON.stringify(clientData))
-  }
-  if (userNotes.trim()) {
-    parts.push(userNotes.trim())
-  }
-  return parts.join(' ')
-}
-
 // ─── Extended types for joined queries ──────────────────────────────────────
 
 export interface OperationWithCount extends Operation {
   participant_count: number
-  client_name?: string
-  client_paid?: boolean
-  user_notes?: string
+  client_name: string | null
+  client_paid: boolean
 }
 
 export interface OperationParticipantWithName extends OperationParticipant {
@@ -86,6 +50,8 @@ export interface CreateOperationPayload {
   operation_date: string
   notes: string | null
   status: OperationStatus
+  client_name?: string | null
+  client_paid?: boolean
   participants: Array<{
     participant_id: string
     percentage_share: number
@@ -131,16 +97,14 @@ export async function getOperations(participantId?: string | null): Promise<Oper
   if (error) throw error
 
   return (data ?? []).map((row) => {
-    const clientData = parseClientData(row.notes)
+    const { operation_participants, ...rest } = row as Record<string, unknown> & {
+      operation_participants?: unknown[]
+    }
     return {
-      ...row,
-      participant_count: Array.isArray(row.operation_participants)
-        ? row.operation_participants.length
+      ...rest,
+      participant_count: Array.isArray(operation_participants)
+        ? operation_participants.length
         : 0,
-      operation_participants: undefined,
-      client_name: clientData?.client_name ?? '',
-      client_paid: clientData?.client_paid ?? false,
-      user_notes: extractUserNotes(row.notes),
     }
   }) as unknown as OperationWithCount[]
 }
@@ -210,115 +174,53 @@ export async function getOperation(id: string): Promise<OperationDetail> {
 }
 
 /**
- * Create an operation with all related data via direct inserts.
- * Does: operations → operation_participants → commission_installments → commission_distributions
+ * Create an operation atomically via the SQL RPC.
+ * All inserts (operations + participants + installments + distributions) run
+ * in a single DB transaction; any failure rolls back everything.
  */
 export async function createOperation(
-  payload: CreateOperationPayload,
+  payload: CreateOperationPayload & { client_name?: string | null; client_paid?: boolean },
 ): Promise<Operation> {
-  // 1. Insert operation
-  const { data: operation, error: opError } = await supabase
+  const installments = payload.installment_definitions.map((def) => ({
+    number: def.number,
+    percentage_of_credit: def.percentage_of_credit,
+  }))
+
+  const rpcParams = {
+    code: payload.code,
+    credit_value: payload.credit_value,
+    commission_model: payload.commission_model,
+    product_type: payload.product_type,
+    commission_rule_id: payload.commission_rule_id,
+    operation_date: payload.operation_date,
+    notes: payload.notes,
+    status: payload.status,
+    client_name: payload.client_name ?? null,
+    client_paid: payload.client_paid ?? false,
+    participants: payload.participants.map((p) => ({
+      participant_id: p.participant_id,
+      percentage_share: p.percentage_share,
+      role_in_operation: p.role_in_operation,
+    })),
+    installments,
+  }
+
+  const { data: newId, error: rpcError } = await supabase.rpc(
+    'create_operation_with_distributions',
+    { params: rpcParams },
+  )
+  if (rpcError) throw rpcError
+  if (!newId) throw new Error('RPC create_operation_with_distributions não retornou ID')
+
+  // Return the created row
+  const { data: created, error: fetchError } = await supabase
     .from('operations')
-    .insert({
-      code: payload.code,
-      credit_value: payload.credit_value,
-      commission_model: payload.commission_model,
-      product_type: payload.product_type,
-      commission_rule_id: payload.commission_rule_id,
-      operation_date: payload.operation_date,
-      notes: payload.notes,
-      status: payload.status,
-    })
-    .select()
+    .select('*')
+    .eq('id', newId)
     .single()
 
-  if (opError) throw opError
-  const operationId = operation.id as string
-
-  try {
-    // 2. Insert participants
-    if (payload.participants.length > 0) {
-      const { error: partError } = await supabase
-        .from('operation_participants')
-        .insert(
-          payload.participants.map((p) => ({
-            operation_id: operationId,
-            participant_id: p.participant_id,
-            percentage_share: p.percentage_share,
-            role_in_operation: p.role_in_operation,
-          })),
-        )
-
-      if (partError) throw partError
-    }
-
-    // 3. Generate and insert installments
-    const generatedInstallments = generateInstallments(
-      payload.credit_value,
-      payload.installment_definitions,
-    )
-
-    // Apply commission_model to get the actual installment amount
-    // The generateInstallments multiplies credit_value by percentage_of_credit,
-    // but the commission installment amount should be credit * commission_model * percentage_of_credit
-    const installmentRows = generatedInstallments.map((inst) => ({
-      operation_id: operationId,
-      installment_number: inst.installment_number,
-      percentage_of_credit: inst.percentage_of_credit,
-      amount:
-        Math.round(
-          payload.credit_value *
-            payload.commission_model *
-            inst.percentage_of_credit *
-            100,
-        ) / 100,
-      due_date: inst.due_date,
-      status: 'pending' as const,
-    }))
-
-    const { data: insertedInstallments, error: instError } = await supabase
-      .from('commission_installments')
-      .insert(installmentRows)
-      .select()
-
-    if (instError) throw instError
-
-    // 4. Generate and insert distributions (installment × participant)
-    const distributionRows: Array<{
-      installment_id: string
-      participant_id: string
-      amount: number
-      status: 'pending'
-    }> = []
-
-    for (const inst of insertedInstallments ?? []) {
-      for (const p of payload.participants) {
-        distributionRows.push({
-          installment_id: inst.id as string,
-          participant_id: p.participant_id,
-          amount:
-            Math.round(
-              (inst.amount as number) * p.percentage_share * 100,
-            ) / 100,
-          status: 'pending',
-        })
-      }
-    }
-
-    if (distributionRows.length > 0) {
-      const { error: distError } = await supabase
-        .from('commission_distributions')
-        .insert(distributionRows)
-
-      if (distError) throw distError
-    }
-
-    return operation as Operation
-  } catch (err) {
-    // Rollback: delete the operation and cascade-delete related rows
-    await supabase.from('operations').delete().eq('id', operationId)
-    throw err
-  }
+  if (fetchError) throw fetchError
+  return created as Operation
 }
 
 /**
@@ -341,28 +243,30 @@ export async function updateOperationStatus(
 
 /**
  * Update client data (name + payment status) on an operation.
+ * Uses the real client_name and client_paid columns (ALTER from 2026-04-11).
  */
 export async function updateOperationClient(
   id: string,
   clientData: OperationClientData,
 ): Promise<void> {
-  // Get current notes to preserve user notes
-  const { data: op, error: fetchError } = await supabase
-    .from('operations')
-    .select('notes')
-    .eq('id', id)
-    .single()
-
-  if (fetchError) throw fetchError
-
-  const userNotes = extractUserNotes(op.notes)
-  const newNotes = buildNotesWithClient(clientData, userNotes)
-
   const { error } = await supabase
     .from('operations')
-    .update({ notes: newNotes })
+    .update({
+      client_name: clientData.client_name || null,
+      client_paid: clientData.client_paid,
+    })
     .eq('id', id)
 
+  if (error) throw error
+}
+
+/**
+ * Reverse (estornar) an entire operation atomically.
+ * Sets operation, installments, and distributions all to 'reversed' and zeroes
+ * paid amounts. Only admin/manager allowed (enforced by RPC).
+ */
+export async function reverseOperation(id: string): Promise<void> {
+  const { error } = await supabase.rpc('reverse_operation', { p_operation_id: id })
   if (error) throw error
 }
 

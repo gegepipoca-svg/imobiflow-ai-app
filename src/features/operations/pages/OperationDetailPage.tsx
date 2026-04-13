@@ -61,11 +61,8 @@ import {
   useUpdateOperationClient,
   useUpdateInstallmentDueDate,
   useDeleteOperation,
+  useReverseOperation,
 } from '../hooks/useOperations'
-import {
-  parseClientData,
-  extractUserNotes,
-} from '../services/operationService'
 
 // ─── Valid status transitions ───────────────────────────────────────────────
 
@@ -88,6 +85,7 @@ export default function OperationDetailPage() {
   const updateClient = useUpdateOperationClient()
   const updateDueDate = useUpdateInstallmentDueDate()
   const deleteOp = useDeleteOperation()
+  const reverseOp = useReverseOperation()
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
@@ -125,7 +123,11 @@ export default function OperationDetailPage() {
 
   async function confirmStatusChange() {
     if (!pendingStatus || !id) return
-    await updateStatus.mutateAsync({ id, status: pendingStatus })
+    if (pendingStatus === 'reversed') {
+      await reverseOp.mutateAsync(id)
+    } else {
+      await updateStatus.mutateAsync({ id, status: pendingStatus })
+    }
     setStatusDialogOpen(false)
     setPendingStatus(null)
   }
@@ -136,14 +138,15 @@ export default function OperationDetailPage() {
     navigate('/operations')
   }
 
-  const clientData = parseClientData(operation.notes)
-  const userNotes = extractUserNotes(operation.notes)
+  const clientName = (operation as { client_name?: string | null }).client_name ?? ''
+  const clientPaid = (operation as { client_paid?: boolean }).client_paid ?? false
+  const userNotes = operation.notes ?? ''
 
   async function toggleClientPaid() {
-    if (!id || !clientData) return
+    if (!id || !clientName) return
     await updateClient.mutateAsync({
       id,
-      clientData: { ...clientData, client_paid: !clientData.client_paid },
+      clientData: { client_name: clientName, client_paid: !clientPaid },
     })
   }
 
@@ -203,7 +206,7 @@ export default function OperationDetailPage() {
       </div>
 
       {/* ─── Client info card ───────────────────────────────────────── */}
-      {clientData && (
+      {clientName && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -215,12 +218,12 @@ export default function OperationDetailPage() {
             <div className="flex flex-wrap items-center gap-6">
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Nome do Cliente</p>
-                <p className="text-sm font-medium">{clientData.client_name}</p>
+                <p className="text-sm font-medium">{clientName}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Pagamento do Cliente</p>
                 <div className="flex items-center gap-2">
-                  {clientData.client_paid ? (
+                  {clientPaid ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
                       <CheckCircle2 className="size-4" /> Pago
                     </span>
@@ -235,7 +238,7 @@ export default function OperationDetailPage() {
                     onClick={toggleClientPaid}
                     disabled={updateClient.isPending}
                   >
-                    {clientData.client_paid ? 'Marcar como Pendente' : 'Marcar como Pago'}
+                    {clientPaid ? 'Marcar como Pendente' : 'Marcar como Pago'}
                   </Button>
                 </div>
               </div>

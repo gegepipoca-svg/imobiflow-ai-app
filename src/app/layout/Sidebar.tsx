@@ -12,6 +12,7 @@ import {
   UserPlus,
   FileBarChart,
   X,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/hooks/useAuth";
@@ -46,7 +47,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
   const userRole = profile?.role ?? "consultor";
 
   const visibleItems = navItems.filter((item) => item.roles.includes(userRole));
@@ -104,8 +105,25 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-sidebar-border px-6 py-4">
-          <p className="text-xs text-sidebar-foreground/50">
+        <div className="border-t border-sidebar-border px-3 py-4 space-y-3">
+          {profile && (
+            <div className="px-3">
+              <p className="text-sm font-medium text-sidebar-foreground truncate">
+                {profile.full_name || "Usuário"}
+              </p>
+              <p className="text-xs text-sidebar-foreground/50 truncate">
+                {profile.email}
+              </p>
+            </div>
+          )}
+          <button
+            onClick={signOut}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
+          >
+            <LogOut className="h-5 w-5 shrink-0" />
+            <span>Sair</span>
+          </button>
+          <p className="px-3 text-xs text-sidebar-foreground/50">
             ComissãoPro v1.0
           </p>
         </div>

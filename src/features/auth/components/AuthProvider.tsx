@@ -35,53 +35,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string, userEmail?: string) => {
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
       .maybeSingle();
 
-    // If no profile row exists, auto-create one as admin (first-time login)
-    if (!error && !data) {
-      const { data: newProfile, error: insertError } = await supabase
-        .from("profiles")
-        .insert({
-          id: userId,
-          full_name: userEmail?.split("@")[0] ?? "Usuário",
-          role: "admin",
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        console.error("Erro ao criar perfil:", insertError);
-        // Fallback: use minimal in-memory profile so UI doesn't break
-        setProfile({
-          id: userId,
-          full_name: userEmail?.split("@")[0] ?? "Usuário",
-          email: userEmail ?? "",
-          role: "admin",
-          participant_id: null,
-          avatar_url: null,
-          created_at: new Date().toISOString(),
-        });
-        return;
-      }
-      data = newProfile;
-    }
-
     if (error) {
       console.error("Erro ao buscar perfil:", error);
-      // Fallback: use minimal in-memory profile so UI doesn't break
-      setProfile({
-        id: userId,
-        full_name: userEmail?.split("@")[0] ?? "Usuário",
-        email: userEmail ?? "",
-        role: "admin",
-        participant_id: null,
-        avatar_url: null,
-        created_at: new Date().toISOString(),
-      });
+      await supabase.auth.signOut();
+      setProfile(null);
+      return;
+    }
+
+    if (!data) {
+      console.error("Perfil não provisionado para o usuário", userId);
+      await supabase.auth.signOut();
+      setProfile(null);
       return;
     }
 

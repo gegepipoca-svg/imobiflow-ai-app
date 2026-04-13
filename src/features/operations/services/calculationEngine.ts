@@ -1,3 +1,4 @@
+import { addMonths, format } from 'date-fns'
 import type { InstallmentDefinition } from '@/shared/types'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -47,27 +48,26 @@ export function calculateCommissionTotal(
 
 /**
  * Generate installments with values and due dates.
- * Due dates are calculated monthly from today.
+ * Due dates are calculated N months from today using addMonths (handles
+ * end-of-month overflow correctly, e.g. Jan 31 + 1 month = Feb 28).
+ * Date is formatted in local timezone (not UTC) to avoid day-off bugs in BRT.
  */
 export function generateInstallments(
   creditValue: number,
   installmentDefs: InstallmentDefinition[],
 ): GeneratedInstallment[] {
   const sorted = [...installmentDefs].sort((a, b) => a.number - b.number)
+  const today = new Date()
 
   return sorted.map((def) => {
-    const dueDate = new Date()
-    dueDate.setMonth(dueDate.getMonth() + def.number)
-    // Normalize to start of day for consistency
-    dueDate.setHours(0, 0, 0, 0)
-
+    const dueDate = addMonths(today, def.number)
     const value = Math.round(creditValue * def.percentage_of_credit * 100) / 100
 
     return {
       installment_number: def.number,
       percentage_of_credit: def.percentage_of_credit,
       value,
-      due_date: dueDate.toISOString().split('T')[0],
+      due_date: format(dueDate, 'yyyy-MM-dd'),
     }
   })
 }

@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   User,
-  Shield,
   Settings2,
   Loader2,
   Save,
@@ -23,41 +22,13 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogClose,
-} from '@/components/ui/dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { DataTable, type DataTableColumn } from '@/shared/components/DataTable'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { USER_ROLE_LABELS } from '@/shared/utils/constants'
-import { formatDate } from '@/shared/utils/formatters'
-import type { Profile, UserRole } from '@/shared/types'
+import type { UserRole } from '@/shared/types'
 
 // ─── Profile Service ──────────────────────────────────────────────────────────
-
-async function getAllProfiles(): Promise<Profile[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .order('full_name')
-
-  if (error) throw error
-  return data
-}
 
 async function updateProfileName(
   userId: string,
@@ -71,28 +42,14 @@ async function updateProfileName(
   if (error) throw error
 }
 
-async function updateProfileRole(
-  userId: string,
-  role: UserRole,
-): Promise<void> {
-  const { error } = await supabase
-    .from('profiles')
-    .update({ role })
-    .eq('id', userId)
-
-  if (error) throw error
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const { isAdmin } = useAuth()
-
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Configuracoes"
-        description="Gerencie seu perfil e configuracoes do sistema"
+        title="Configurações"
+        description="Gerencie seu perfil e configurações do sistema"
       />
 
       <Tabs defaultValue="perfil">
@@ -101,12 +58,6 @@ export default function SettingsPage() {
             <User className="size-4" />
             Perfil
           </TabsTrigger>
-          {isAdmin && (
-            <TabsTrigger value="usuarios">
-              <Shield className="size-4" />
-              Usuarios
-            </TabsTrigger>
-          )}
           <TabsTrigger value="sistema">
             <Settings2 className="size-4" />
             Sistema
@@ -116,12 +67,6 @@ export default function SettingsPage() {
         <TabsContent value="perfil">
           <ProfileTab />
         </TabsContent>
-
-        {isAdmin && (
-          <TabsContent value="usuarios">
-            <UsersTab />
-          </TabsContent>
-        )}
 
         <TabsContent value="sistema">
           <SystemTab />
@@ -329,166 +274,6 @@ function ProfileTab() {
           )}
         </CardContent>
       </Card>
-    </div>
-  )
-}
-
-// ─── Users Tab ────────────────────────────────────────────────────────────────
-
-function UsersTab() {
-  const queryClient = useQueryClient()
-  const [editingUser, setEditingUser] = useState<Profile | null>(null)
-  const [editRole, setEditRole] = useState<UserRole>('consultant')
-
-  const {
-    data: profiles = [],
-    isLoading,
-  } = useQuery({
-    queryKey: ['admin-profiles'],
-    queryFn: getAllProfiles,
-  })
-
-  const updateRoleMutation = useMutation({
-    mutationFn: () => updateProfileRole(editingUser!.id, editRole),
-    onSuccess: () => {
-      toast.success('Funcao atualizada com sucesso.')
-      queryClient.invalidateQueries({ queryKey: ['admin-profiles'] })
-      setEditingUser(null)
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao atualizar funcao: ${error.message}`)
-    },
-  })
-
-  const columns: DataTableColumn<Profile>[] = [
-    {
-      key: 'full_name',
-      header: 'Nome',
-      sortable: true,
-      cell: (row) => (
-        <span className="font-medium">{row.full_name || '-'}</span>
-      ),
-    },
-    {
-      key: 'email',
-      header: 'Email',
-      sortable: true,
-    },
-    {
-      key: 'role',
-      header: 'Funcao',
-      sortable: true,
-      cell: (row) => (
-        <Badge variant="outline">
-          {USER_ROLE_LABELS[row.role] || row.role}
-        </Badge>
-      ),
-    },
-    {
-      key: 'created_at',
-      header: 'Criado em',
-      sortable: true,
-      cell: (row) => (
-        <span className="tabular-nums">{formatDate(row.created_at)}</span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      cell: (row) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setEditingUser(row)
-            setEditRole(row.role)
-          }}
-        >
-          Editar
-        </Button>
-      ),
-    },
-  ]
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Gerenciar Usuarios</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={columns}
-            data={profiles}
-            loading={isLoading}
-            searchable
-            searchKey="full_name"
-            pagination
-            pageSize={10}
-            emptyMessage="Nenhum usuario encontrado."
-          />
-        </CardContent>
-      </Card>
-
-      {/* Edit Role Dialog */}
-      <Dialog
-        open={editingUser !== null}
-        onOpenChange={(open) => {
-          if (!open) setEditingUser(null)
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar Funcao</DialogTitle>
-            <DialogDescription>
-              Altere a funcao de{' '}
-              <span className="font-medium">
-                {editingUser?.full_name || editingUser?.email}
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Funcao</Label>
-              <Select
-                value={editRole}
-                onValueChange={(val) => {
-                  if (val) setEditRole(val as UserRole)
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(
-                    Object.entries(USER_ROLE_LABELS) as [UserRole, string][]
-                  ).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
-              Cancelar
-            </DialogClose>
-            <Button
-              onClick={() => updateRoleMutation.mutate()}
-              disabled={updateRoleMutation.isPending}
-            >
-              {updateRoleMutation.isPending && (
-                <Loader2 className="size-4 animate-spin" />
-              )}
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
