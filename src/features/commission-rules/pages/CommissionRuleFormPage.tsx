@@ -75,12 +75,22 @@ export default function CommissionRuleFormPage() {
   }, [existingRule, reset])
 
   const watchedInstallments = watch('installments')
+  const watchedCommissionModel = watch('commission_model')
   const totalPercentage = watchedInstallments.reduce(
     (sum, inst) => sum + (Number(inst.percentage_of_credit) || 0),
     0,
   )
   const totalDisplay = (totalPercentage * 100).toFixed(2).replace(/\.?0+$/, '')
-  const isTotalValid = totalPercentage <= 1.0001
+  // Installments devem somar exatamente o commission_model (regra de negócio).
+  // Ex: commission_model = 1.25% → parcelas 0.5% + 0.25% + 0.25% + 0.25% = 1.25%
+  const isTotalValid =
+    watchedCommissionModel > 0
+      ? Math.abs(totalPercentage - watchedCommissionModel) < 0.0001
+      : totalPercentage === 0
+  const expectedDisplay =
+    watchedCommissionModel > 0
+      ? (watchedCommissionModel * 100).toFixed(2).replace(/\.?0+$/, '')
+      : '0'
 
   function addInstallment() {
     const nextNumber = fields.length + 1
@@ -351,14 +361,17 @@ export default function CommissionRuleFormPage() {
               >
                 {totalDisplay}%
               </span>
-              {!isTotalValid && (
-                <span className="text-xs text-red-600 dark:text-red-400">
-                  (excede 100%)
+              <span className="text-xs text-muted-foreground">
+                (esperado: {expectedDisplay}%)
+              </span>
+              {watchedCommissionModel > 0 && isTotalValid && totalPercentage > 0 && (
+                <span className="text-xs text-green-600 dark:text-green-400">
+                  ✓ completo
                 </span>
               )}
-              {totalPercentage > 0 && isTotalValid && (
-                <span className="text-xs text-green-600 dark:text-green-400">
-                  {Math.abs(totalPercentage - 1) < 0.0001 ? '(completo)' : ''}
+              {watchedCommissionModel > 0 && !isTotalValid && (
+                <span className="text-xs text-red-600 dark:text-red-400">
+                  {totalPercentage > watchedCommissionModel ? 'excede' : 'falta preencher'}
                 </span>
               )}
             </div>

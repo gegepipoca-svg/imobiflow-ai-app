@@ -378,7 +378,7 @@ export default function OperationDetailPage() {
                       {formatPercentage(inst.percentage_of_credit)}
                     </TableCell>
                     <TableCell>
-                      <CurrencyDisplay value={inst.amount} />
+                      <CurrencyDisplay value={inst.value ?? 0} />
                     </TableCell>
                     <TableCell>
                       <Input
@@ -437,7 +437,7 @@ export default function OperationDetailPage() {
                         </TableCell>
                         <TableCell>{inst.installment_number}</TableCell>
                         <TableCell className="text-right">
-                          <CurrencyDisplay value={dist.amount} />
+                          <CurrencyDisplay value={dist.value ?? 0} />
                         </TableCell>
                         <TableCell>
                           <StatusBadge

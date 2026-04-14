@@ -86,7 +86,7 @@ export interface CommissionInstallment {
   operation_id: string
   installment_number: number
   percentage_of_credit: number
-  amount: number
+  value: number
   due_date: string | null
   status: InstallmentStatus
   created_at: string
@@ -97,7 +97,7 @@ export interface CommissionDistribution {
   id: string
   installment_id: string
   participant_id: string
-  amount: number
+  value: number
   status: DistributionStatus
   created_at: string
   updated_at: string
