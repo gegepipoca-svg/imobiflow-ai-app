@@ -12,10 +12,12 @@ export interface DistributionWithDetails {
   created_at: string
   updated_at: string
   participant_name: string
+  participant_type: string
   operation_id: string
   operation_code: string
   installment_number: number
   installment_amount: number
+  installment_due_date: string | null
   paid_amount: number
   pending_amount: number
 }
@@ -37,10 +39,11 @@ export async function getDistributionsWithDetails(participantId?: string | null)
     .from('commission_distributions')
     .select(`
       *,
-      participant:participants(name),
+      participant:participants(name, type),
       installment:commission_installments(
         installment_number,
         value,
+        due_date,
         operation_id,
         operation:operations(id, code)
       )
@@ -84,10 +87,12 @@ export async function getDistributionsWithDetails(participantId?: string | null)
       created_at: d.created_at,
       updated_at: d.updated_at,
       participant_name: (participant?.name as string) ?? 'Desconhecido',
+      participant_type: (participant?.type as string) ?? '',
       operation_id: (operation?.id as string) ?? '',
       operation_code: (operation?.code as string) ?? '',
       installment_number: (installment?.installment_number as number) ?? 0,
       installment_amount: (installment?.value as number) ?? 0,
+      installment_due_date: (installment?.due_date as string | null) ?? null,
       paid_amount: paidAmount,
       pending_amount: (d.value ?? 0) - paidAmount,
     }

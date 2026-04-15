@@ -20,8 +20,9 @@ import { paymentSchema, type PaymentFormValues } from '@/shared/utils/validators
 import {
   PAYMENT_METHOD_LABELS,
   DISTRIBUTION_STATUS_LABELS,
+  PARTICIPANT_TYPE_LABELS,
 } from '@/shared/utils/constants'
-import type { DistributionStatus, PaymentMethod } from '@/shared/types'
+import type { DistributionStatus, PaymentMethod, ParticipantType } from '@/shared/types'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -281,16 +282,61 @@ function DistributionsTab() {
     isConsultor ? participantId : undefined
   )
   const [statusFilter, setStatusFilter] = useState<DistributionStatus | 'all'>('all')
+  const [typeFilter, setTypeFilter] = useState<ParticipantType | 'all'>('all')
+  const [participantFilter, setParticipantFilter] = useState<string>('all')
+  const [dateFrom, setDateFrom] = useState<string>('')
+  const [dateTo, setDateTo] = useState<string>('')
   const [search, setSearch] = useState('')
   const [selectedDistribution, setSelectedDistribution] =
     useState<DistributionWithDetails | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+
+  // Lista de participantes únicos para o filtro (baseado nos dados carregados)
+  const participantOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; type: string }>()
+    for (const d of distributions ?? []) {
+      if (!map.has(d.participant_id)) {
+        map.set(d.participant_id, {
+          id: d.participant_id,
+          name: d.participant_name,
+          type: d.participant_type,
+        })
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [distributions])
+
+  // Participantes filtrados pelo tipo selecionado
+  const filteredParticipantOptions = useMemo(() => {
+    if (typeFilter === 'all') return participantOptions
+    return participantOptions.filter((p) => p.type === typeFilter)
+  }, [participantOptions, typeFilter])
 
   const filteredData = useMemo(() => {
     let items = distributions ?? []
 
     if (statusFilter !== 'all') {
       items = items.filter((d) => d.status === statusFilter)
+    }
+
+    if (typeFilter !== 'all') {
+      items = items.filter((d) => d.participant_type === typeFilter)
+    }
+
+    if (participantFilter !== 'all') {
+      items = items.filter((d) => d.participant_id === participantFilter)
+    }
+
+    if (dateFrom) {
+      items = items.filter(
+        (d) => d.installment_due_date && d.installment_due_date >= dateFrom,
+      )
+    }
+
+    if (dateTo) {
+      items = items.filter(
+        (d) => d.installment_due_date && d.installment_due_date <= dateTo,
+      )
     }
 
     if (search.trim()) {
@@ -303,7 +349,37 @@ function DistributionsTab() {
     }
 
     return items
-  }, [distributions, statusFilter, search])
+  }, [
+    distributions,
+    statusFilter,
+    typeFilter,
+    participantFilter,
+    dateFrom,
+    dateTo,
+    search,
+  ])
+
+  // Totalizadores com base nos dados filtrados
+  const totals = useMemo(() => {
+    return filteredData.reduce(
+      (acc, d) => {
+        acc.total += d.amount ?? 0
+        acc.paid += d.paid_amount ?? 0
+        acc.pending += d.pending_amount ?? 0
+        return acc
+      },
+      { total: 0, paid: 0, pending: 0 },
+    )
+  }, [filteredData])
+
+  function clearFilters() {
+    setStatusFilter('all')
+    setTypeFilter('all')
+    setParticipantFilter('all')
+    setDateFrom('')
+    setDateTo('')
+    setSearch('')
+  }
 
   function handleRecordPayment(distribution: DistributionWithDetails) {
     setSelectedDistribution(distribution)
@@ -313,7 +389,7 @@ function DistributionsTab() {
   const columns: DataTableColumn<DistributionWithDetails>[] = [
     {
       key: 'operation_code',
-      header: 'Operacao',
+      header: 'Operação',
       sortable: true,
       cell: (row) => (
         <span className="font-medium">{row.operation_code}</span>
@@ -323,12 +399,33 @@ function DistributionsTab() {
       key: 'participant_name',
       header: 'Participante',
       sortable: true,
+      cell: (row) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{row.participant_name}</span>
+          {row.participant_type && (
+            <span className="text-xs text-muted-foreground">
+              {PARTICIPANT_TYPE_LABELS[row.participant_type as ParticipantType] ??
+                row.participant_type}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'installment_number',
       header: 'Parcela',
       sortable: true,
       cell: (row) => <span>#{row.installment_number}</span>,
+    },
+    {
+      key: 'installment_due_date',
+      header: 'Vencimento',
+      sortable: true,
+      cell: (row) => (
+        <span className={row.installment_due_date ? '' : 'text-muted-foreground'}>
+          {row.installment_due_date ? formatDate(row.installment_due_date) : '—'}
+        </span>
+      ),
     },
     {
       key: 'amount',
@@ -380,43 +477,185 @@ function DistributionsTab() {
     },
   ]
 
+  const activeFiltersCount =
+    (statusFilter !== 'all' ? 1 : 0) +
+    (typeFilter !== 'all' ? 1 : 0) +
+    (participantFilter !== 'all' ? 1 : 0) +
+    (dateFrom ? 1 : 0) +
+    (dateTo ? 1 : 0) +
+    (search.trim() ? 1 : 0)
+
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-64">
-          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar participante ou operacao..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8"
-          />
+      {/* Filtros */}
+      <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">Filtros</h3>
+          {activeFiltersCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              Limpar ({activeFiltersCount})
+            </Button>
+          )}
         </div>
 
-        <Select
-          value={statusFilter}
-          onValueChange={(val) => {
-            if (val) setStatusFilter(val as DistributionStatus | 'all')
-          }}
-        >
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Filtrar status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {(
-              Object.entries(DISTRIBUTION_STATUS_LABELS) as [
-                DistributionStatus,
-                string,
-              ][]
-            ).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Busca */}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Buscar</Label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Participante ou operação..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+          </div>
+
+          {/* Tipo */}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">
+              Tipo de Participante
+            </Label>
+            <Select
+              value={typeFilter}
+              onValueChange={(val) => {
+                if (!val) return
+                setTypeFilter(val as ParticipantType | 'all')
+                setParticipantFilter('all')
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Todos">
+                  {typeFilter === 'all'
+                    ? 'Todos'
+                    : PARTICIPANT_TYPE_LABELS[typeFilter as ParticipantType]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tipos</SelectItem>
+                {(
+                  Object.entries(PARTICIPANT_TYPE_LABELS) as [
+                    ParticipantType,
+                    string,
+                  ][]
+                ).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Participante específico */}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Participante</Label>
+            <Select
+              value={participantFilter}
+              onValueChange={(val) => {
+                if (val) setParticipantFilter(val)
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Todos">
+                  {participantFilter === 'all'
+                    ? 'Todos'
+                    : filteredParticipantOptions.find(
+                        (p) => p.id === participantFilter,
+                      )?.name ?? 'Todos'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os participantes</SelectItem>
+                {filteredParticipantOptions.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Status */}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Status</Label>
+            <Select
+              value={statusFilter}
+              onValueChange={(val) => {
+                if (val) setStatusFilter(val as DistributionStatus | 'all')
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {statusFilter === 'all'
+                    ? 'Todos'
+                    : DISTRIBUTION_STATUS_LABELS[statusFilter]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                {(
+                  Object.entries(DISTRIBUTION_STATUS_LABELS) as [
+                    DistributionStatus,
+                    string,
+                  ][]
+                ).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Data de vencimento - De */}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">
+              Vencimento (de)
+            </Label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+
+          {/* Data de vencimento - Até */}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">
+              Vencimento (até)
+            </Label>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Totalizadores */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Total</p>
+          <CurrencyDisplay value={totals.total} className="text-lg font-semibold" />
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Pago</p>
+          <CurrencyDisplay
+            value={totals.paid}
+            className="text-lg font-semibold text-green-600"
+          />
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Pendente</p>
+          <CurrencyDisplay
+            value={totals.pending}
+            className="text-lg font-semibold text-amber-600"
+          />
+        </div>
       </div>
 
       <DataTable
@@ -425,7 +664,7 @@ function DistributionsTab() {
         loading={isLoading}
         pagination
         pageSize={10}
-        emptyMessage="Nenhuma distribuicao encontrada."
+        emptyMessage="Nenhuma distribuição encontrada."
       />
 
       <RecordPaymentDialog
