@@ -46,6 +46,7 @@ import {
 } from '@/shared/utils/formatters'
 import { cn } from '@/lib/utils'
 import { getCommissionRules } from '@/features/commission-rules/services/commissionRuleService'
+import { getParticipants } from '@/features/participants/services/participantService'
 import {
   simulateCommission,
   validateParticipantShares,
@@ -53,11 +54,18 @@ import {
 } from '@/features/operations/services/calculationEngine'
 import type { CommissionRule } from '@/shared/types'
 
+const PARTICIPANT_TYPE_LABEL: Record<string, string> = {
+  consultant: 'Consultor',
+  partner: 'Parceiro',
+  office: 'Escritório',
+  intermediary: 'Intermediário',
+}
+
 // ─── Local types ──────────────────────────────────────────────────────────────
 
 interface SimParticipant {
-  id: string
-  name: string
+  rowKey: string
+  participantId: string | null
   percentage_share: number
 }
 
@@ -93,10 +101,10 @@ const DEFAULT_PARAMS: SimParams = {
   creditValue: 0,
   commissionModel: 0,
   installments: [{ number: 1, percentage_of_credit: 0 }],
-  participants: [{ id: crypto.randomUUID(), name: '', percentage_share: 0 }],
+  participants: [
+    { rowKey: crypto.randomUUID(), participantId: null, percentage_share: 0 },
+  ],
 }
-
-let participantCounter = 1
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -111,6 +119,11 @@ export default function SimulationPage() {
   const { data: rules = [] } = useQuery({
     queryKey: ['commission-rules'],
     queryFn: getCommissionRules,
+  })
+
+  const { data: allParticipants = [] } = useQuery({
+    queryKey: ['participants'],
+    queryFn: getParticipants,
   })
 
   // ─── Derived state ────────────────────────────────────────────────────────
@@ -140,7 +153,9 @@ export default function SimulationPage() {
     params.installments.length > 0 &&
     params.installments.every((i) => i.percentage_of_credit > 0) &&
     params.participants.length > 0 &&
-    params.participants.every((p) => p.name.trim() !== '' && p.percentage_share > 0) &&
+    params.participants.every(
+      (p) => p.participantId !== null && p.percentage_share > 0,
+    ) &&
     participantValidation.valid
 
   // ─── Actions ──────────────────────────────────────────────────────────────
@@ -153,10 +168,12 @@ export default function SimulationPage() {
         number: i + 1,
         percentage_of_credit: inst.percentage_of_credit,
       })),
-      params.participants.map((p) => ({
-        participant_id: p.id,
-        percentage_share: p.percentage_share,
-      })),
+      params.participants
+        .filter((p) => p.participantId !== null)
+        .map((p) => ({
+          participant_id: p.participantId as string,
+          percentage_share: p.percentage_share,
+        })),
     )
     setResult(breakdown)
   }, [params])
@@ -181,8 +198,12 @@ export default function SimulationPage() {
   )
 
   const handleReset = useCallback(() => {
-    participantCounter = 1
-    setParams({ ...DEFAULT_PARAMS, participants: [{ id: crypto.randomUUID(), name: '', percentage_share: 0 }] })
+    setParams({
+      ...DEFAULT_PARAMS,
+      participants: [
+        { rowKey: crypto.randomUUID(), participantId: null, percentage_share: 0 },
+      ],
+    })
     setResult(null)
     setSelectedRuleId(null)
     setComparisonScenario(null)
@@ -253,14 +274,13 @@ export default function SimulationPage() {
   }
 
   const addParticipant = () => {
-    participantCounter++
     setParams((p) => ({
       ...p,
       participants: [
         ...p.participants,
         {
-          id: crypto.randomUUID(),
-          name: '',
+          rowKey: crypto.randomUUID(),
+          participantId: null,
           percentage_share: 0,
         },
       ],
@@ -275,11 +295,11 @@ export default function SimulationPage() {
     }))
   }
 
-  const updateParticipantName = (index: number, name: string) => {
+  const updateParticipantSelection = (index: number, participantId: string) => {
     setParams((p) => ({
       ...p,
       participants: p.participants.map((part, i) =>
-        i === index ? { ...part, name } : part,
+        i === index ? { ...part, participantId } : part,
       ),
     }))
   }
@@ -298,20 +318,25 @@ export default function SimulationPage() {
 
   // ─── Helpers for display ──────────────────────────────────────────────────
 
-  const getParticipantName = (participantId: string): string => {
-    return (
-      params.participants.find((p) => p.id === participantId)?.name ||
-      'Desconhecido'
-    )
-  }
+  const getParticipantName = useCallback(
+    (participantId: string): string => {
+      return (
+        allParticipants.find((p) => p.id === participantId)?.name ||
+        'Desconhecido'
+      )
+    },
+    [allParticipants],
+  )
 
-  const getComparisonParticipantName = (participantId: string): string => {
-    return (
-      comparisonScenario?.params.participants.find(
-        (p) => p.id === participantId,
-      )?.name || 'Desconhecido'
-    )
-  }
+  const getComparisonParticipantName = useCallback(
+    (participantId: string): string => {
+      return (
+        allParticipants.find((p) => p.id === participantId)?.name ||
+        'Desconhecido'
+      )
+    },
+    [allParticipants],
+  )
 
   // Build pie chart data from result
   const pieData = useMemo(() => {
@@ -320,7 +345,7 @@ export default function SimulationPage() {
       name: getParticipantName(pt.participant_id),
       value: pt.total,
     }))
-  }, [result, params.participants])
+  }, [result, getParticipantName])
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -543,47 +568,86 @@ export default function SimulationPage() {
                 <span />
               </div>
 
-              {params.participants.map((part, index) => (
-                <div
-                  key={part.id}
-                  className="grid grid-cols-[1fr_100px_40px] items-center gap-3"
-                >
-                  <Input
-                    placeholder="Nome do participante"
-                    value={part.name}
-                    onChange={(e) =>
-                      updateParticipantName(index, e.target.value)
-                    }
-                  />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    placeholder="%"
-                    value={
-                      part.percentage_share
-                        ? (part.percentage_share * 100)
-                            .toFixed(2)
-                            .replace(/\.?0+$/, '')
-                        : ''
-                    }
-                    onChange={(e) =>
-                      updateParticipantPercent(index, e.target.value)
-                    }
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    disabled={params.participants.length <= 1}
-                    onClick={() => removeParticipant(index)}
-                    className="h-8 w-8"
+              {params.participants.map((part, index) => {
+                const selectedElsewhere = new Set(
+                  params.participants
+                    .filter((_, i) => i !== index)
+                    .map((p) => p.participantId)
+                    .filter((id): id is string => id !== null),
+                )
+                const availableOptions = allParticipants.filter(
+                  (p) =>
+                    !selectedElsewhere.has(p.id) || p.id === part.participantId,
+                )
+
+                return (
+                  <div
+                    key={part.rowKey}
+                    className="grid grid-cols-[1fr_100px_40px] items-center gap-3"
                   >
-                    <Trash2 className="size-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
+                    <Select
+                      value={part.participantId ?? undefined}
+                      onValueChange={(val) =>
+                        updateParticipantSelection(index, val)
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecione um participante..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableOptions.length === 0 ? (
+                          <div className="px-2 py-3 text-center text-sm text-muted-foreground">
+                            Nenhum participante disponível
+                          </div>
+                        ) : (
+                          availableOptions.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                              {p.type && PARTICIPANT_TYPE_LABEL[p.type]
+                                ? ` · ${PARTICIPANT_TYPE_LABEL[p.type]}`
+                                : ''}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      placeholder="%"
+                      value={
+                        part.percentage_share
+                          ? (part.percentage_share * 100)
+                              .toFixed(2)
+                              .replace(/\.?0+$/, '')
+                          : ''
+                      }
+                      onChange={(e) =>
+                        updateParticipantPercent(index, e.target.value)
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={params.participants.length <= 1}
+                      onClick={() => removeParticipant(index)}
+                      className="h-8 w-8"
+                    >
+                      <Trash2 className="size-4 text-destructive" />
+                    </Button>
+                  </div>
+                )
+              })}
+
+              {allParticipants.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum participante cadastrado. Cadastre em "Participantes" para
+                  usar aqui.
+                </p>
+              )}
 
               {/* Validation */}
               <div className="mt-2 flex items-center gap-3 border-t pt-3">
