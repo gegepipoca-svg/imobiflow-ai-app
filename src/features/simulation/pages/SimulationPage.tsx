@@ -587,9 +587,9 @@ export default function SimulationPage() {
                   >
                     <Select
                       value={part.participantId ?? undefined}
-                      onValueChange={(val) =>
-                        updateParticipantSelection(index, val)
-                      }
+                      onValueChange={(val) => {
+                        if (val) updateParticipantSelection(index, val)
+                      }}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Selecione um participante..." />
