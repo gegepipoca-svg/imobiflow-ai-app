@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/shared/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,11 +53,39 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { getCommissionRules } from "@/features/commission-rules/services/commissionRuleService";
+import type { CommissionRule, ProductType } from "@/shared/types";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type DbRole = "admin" | "manager" | "consultant" | "partner";
+
+const PRODUCT_LABELS: Record<ProductType, string> = {
+  imovel: "Imóvel",
+  auto: "Automóvel",
+  servico: "Serviços",
+  outros: "Outros",
+};
+
+// Roles that have RLS-filtered access — for these we let admin pick which rules
+// they can see. admin/manager always see everything via RLS.
+function isLimitedRole(role: DbRole): boolean {
+  return role === "consultant" || role === "partner";
+}
+
+async function getRuleIdsForUser(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("user_commission_rules")
+    .select("rule_id")
+    .eq("user_id", userId);
+
+  if (error) throw error;
+  return (data ?? []).map((r) => r.rule_id as string);
+}
 
 interface UserProfile {
   id: string;
@@ -111,6 +139,104 @@ async function getUsers(): Promise<UserProfile[]> {
   return (data ?? []) as UserProfile[];
 }
 
+// ─── CommissionRulesPicker ──────────────────────────────────────────────────
+
+interface CommissionRulesPickerProps {
+  rules: CommissionRule[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+}
+
+function CommissionRulesPicker({ rules, value, onChange }: CommissionRulesPickerProps) {
+  const activeRules = rules.filter((r) => r.is_active);
+  const grouped = activeRules.reduce<Record<string, CommissionRule[]>>((acc, r) => {
+    (acc[r.product_type] ||= []).push(r);
+    return acc;
+  }, {});
+
+  const allIds = activeRules.map((r) => r.id);
+  const allSelected = allIds.length > 0 && allIds.every((id) => value.includes(id));
+  const noneSelected = value.length === 0;
+
+  const toggle = (id: string, checked: boolean) => {
+    if (checked) onChange([...value, id]);
+    else onChange(value.filter((v) => v !== id));
+  };
+
+  if (activeRules.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-3 text-center text-sm text-muted-foreground">
+        Nenhuma regra de comissão ativa cadastrada.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border">
+      <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-xs">
+        <span className="text-muted-foreground tabular-nums">
+          {value.length} de {activeRules.length} selecionada(s)
+        </span>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={() => onChange(allIds)}
+            disabled={allSelected}
+          >
+            Marcar todas
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={() => onChange([])}
+            disabled={noneSelected}
+          >
+            Limpar
+          </Button>
+        </div>
+      </div>
+      <ScrollArea className="max-h-64">
+        <div className="space-y-3 p-3">
+          {(Object.keys(grouped) as ProductType[]).map((productType, idx) => (
+            <div key={productType} className="space-y-1.5">
+              {idx > 0 && <Separator className="my-2" />}
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {PRODUCT_LABELS[productType] ?? productType}
+              </p>
+              {grouped[productType].map((rule) => {
+                const id = `rule-${rule.id}`;
+                const checked = value.includes(rule.id);
+                return (
+                  <label
+                    key={rule.id}
+                    htmlFor={id}
+                    className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      id={id}
+                      checked={checked}
+                      onCheckedChange={(c) => toggle(rule.id, c === true)}
+                    />
+                    <span className="flex-1 text-sm">{rule.name}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {(rule.commission_model * 100).toFixed(2)}%
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function UsersPage() {
@@ -130,6 +256,7 @@ export default function UsersPage() {
     password: "",
     role: "consultant" as DbRole,
   });
+  const [newUserRuleIds, setNewUserRuleIds] = useState<string[]>([]);
   const [createdCredentials, setCreatedCredentials] = useState<{
     email: string;
     password: string;
@@ -140,6 +267,20 @@ export default function UsersPage() {
   // Edit form
   const [editRole, setEditRole] = useState<DbRole>("consultant");
   const [editName, setEditName] = useState("");
+  const [editRuleIds, setEditRuleIds] = useState<string[]>([]);
+
+  // ─── Load all commission rules (admin sees all via RLS) ───────────────────
+  const { data: rules = [] } = useQuery({
+    queryKey: ["commission-rules"],
+    queryFn: getCommissionRules,
+  });
+
+  // ─── Load existing rule associations for the user being edited ────────────
+  const { data: existingRuleIds } = useQuery({
+    queryKey: ["user-commission-rules", selectedUser?.id],
+    queryFn: () => getRuleIdsForUser(selectedUser!.id),
+    enabled: !!selectedUser?.id && editDialogOpen,
+  });
 
   // Reset password form
   const [resetPassword, setResetPassword] = useState("");
@@ -159,6 +300,8 @@ export default function UsersPage() {
         password: newUser.password,
         full_name: newUser.full_name,
         role: newUser.role,
+        // Only send rule ids for limited roles. Admin/manager bypass via RLS.
+        commission_rule_ids: isLimitedRole(newUser.role) ? newUserRuleIds : [],
       }),
     onSuccess: () => {
       setCreatedCredentials({
@@ -166,6 +309,7 @@ export default function UsersPage() {
         password: newUser.password,
       });
       setNewUser({ full_name: "", email: "", password: "", role: "consultant" });
+      setNewUserRuleIds([]);
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("Usuário criado com sucesso!");
     },
@@ -183,10 +327,14 @@ export default function UsersPage() {
         action: "update_role",
         role: editRole,
         full_name: editName || undefined,
+        // Only send rule ids for limited roles. Admin/manager bypass via RLS.
+        // Sending [] for admin/manager clears any stale associations.
+        commission_rule_ids: isLimitedRole(editRole) ? editRuleIds : [],
       }),
     onSuccess: () => {
       toast.success("Perfil atualizado!");
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["user-commission-rules", selectedUser?.id] });
       setEditDialogOpen(false);
       setSelectedUser(null);
     },
@@ -255,8 +403,16 @@ export default function UsersPage() {
     setSelectedUser(user);
     setEditRole(user.role);
     setEditName(user.full_name || "");
+    setEditRuleIds([]); // hydrated by the useEffect below once the query resolves
     setEditDialogOpen(true);
   };
+
+  // Hydrate the rule picker once the query resolves
+  useEffect(() => {
+    if (existingRuleIds) {
+      setEditRuleIds(existingRuleIds);
+    }
+  }, [existingRuleIds]);
 
   const openResetPasswordDialog = (user: UserProfile) => {
     setSelectedUser(user);
@@ -549,6 +705,25 @@ export default function UsersPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {isLimitedRole(newUser.role) ? (
+                  <div className="space-y-2">
+                    <Label>Regras de Comissão Disponíveis</Label>
+                    <CommissionRulesPicker
+                      rules={rules}
+                      value={newUserRuleIds}
+                      onChange={setNewUserRuleIds}
+                    />
+                    {newUserRuleIds.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Sem regras marcadas, o usuário não verá nenhuma regra de comissão.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    Administradores e gerentes têm acesso a todas as regras de comissão automaticamente.
+                  </p>
+                )}
               </div>
               <DialogFooter className="gap-2">
                 <Button
@@ -627,6 +802,25 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </div>
+            {isLimitedRole(editRole) ? (
+              <div className="space-y-2">
+                <Label>Regras de Comissão Disponíveis</Label>
+                <CommissionRulesPicker
+                  rules={rules}
+                  value={editRuleIds}
+                  onChange={setEditRuleIds}
+                />
+                {editRuleIds.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Sem regras marcadas, o usuário não verá nenhuma regra de comissão.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                Administradores e gerentes têm acesso a todas as regras de comissão automaticamente.
+              </p>
+            )}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>

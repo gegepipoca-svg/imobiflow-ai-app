@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     }
 
     // Parse request
-    const { email, password, full_name, role } = await req.json();
+    const { email, password, full_name, role, commission_rule_ids } = await req.json();
 
     if (!email || !password || !full_name || !role) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios: email, password, full_name, role" }), {
@@ -71,6 +71,13 @@ Deno.serve(async (req) => {
 
     if (password.length < 6) {
       return new Response(JSON.stringify({ error: "Senha deve ter pelo menos 6 caracteres" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (commission_rule_ids !== undefined && !Array.isArray(commission_rule_ids)) {
+      return new Response(JSON.stringify({ error: "commission_rule_ids deve ser um array de UUIDs" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -114,12 +121,36 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Associate selected commission rules (only relevant for consultant/partner;
+    // for admin/manager the RLS already grants access to all rules)
+    if (Array.isArray(commission_rule_ids) && commission_rule_ids.length > 0) {
+      const rows = commission_rule_ids.map((rule_id: string) => ({
+        user_id: newUser.user.id,
+        rule_id,
+        created_by: caller.id,
+      }));
+
+      const { error: linkError } = await adminClient
+        .from("user_commission_rules")
+        .insert(rows);
+
+      if (linkError) {
+        // Rollback: delete the auth user (cascades profile + any partial rules)
+        await adminClient.auth.admin.deleteUser(newUser.user.id);
+        return new Response(JSON.stringify({ error: `Erro ao vincular regras: ${linkError.message}` }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     return new Response(
       JSON.stringify({
         id: newUser.user.id,
         email: newUser.user.email,
         full_name,
         role,
+        commission_rule_ids: Array.isArray(commission_rule_ids) ? commission_rule_ids : [],
       }),
       {
         status: 201,

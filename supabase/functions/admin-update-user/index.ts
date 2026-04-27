@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { user_id, action, role, full_name, password } = body;
+    const { user_id, action, role, full_name, password, commission_rule_ids } = body;
 
     if (!user_id || !action) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios: user_id, action" }), {
@@ -79,6 +79,13 @@ Deno.serve(async (req) => {
         });
       }
 
+      if (commission_rule_ids !== undefined && !Array.isArray(commission_rule_ids)) {
+        return new Response(JSON.stringify({ error: "commission_rule_ids deve ser um array de UUIDs" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const updates: Record<string, string> = { role };
       if (full_name) updates.full_name = full_name;
 
@@ -94,7 +101,84 @@ Deno.serve(async (req) => {
         });
       }
 
+      // If client sent commission_rule_ids, rewrite the user's rule associations
+      // (delete-all-then-insert). Sending [] clears all associations.
+      if (Array.isArray(commission_rule_ids)) {
+        const { error: linkErr } = await adminClient
+          .from("user_commission_rules")
+          .delete()
+          .eq("user_id", user_id);
+
+        if (linkErr) {
+          return new Response(JSON.stringify({ error: `Erro ao limpar regras antigas: ${linkErr.message}` }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        if (commission_rule_ids.length > 0) {
+          const rows = commission_rule_ids.map((rule_id: string) => ({
+            user_id,
+            rule_id,
+            created_by: caller.id,
+          }));
+          const { error: insErr } = await adminClient
+            .from("user_commission_rules")
+            .insert(rows);
+
+          if (insErr) {
+            return new Response(JSON.stringify({ error: `Erro ao vincular regras: ${insErr.message}` }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, action: "update_role" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "update_commission_rules") {
+      if (!Array.isArray(commission_rule_ids)) {
+        return new Response(JSON.stringify({ error: "commission_rule_ids deve ser um array de UUIDs" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error: delErr } = await adminClient
+        .from("user_commission_rules")
+        .delete()
+        .eq("user_id", user_id);
+
+      if (delErr) {
+        return new Response(JSON.stringify({ error: `Erro ao limpar regras antigas: ${delErr.message}` }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (commission_rule_ids.length > 0) {
+        const rows = commission_rule_ids.map((rule_id: string) => ({
+          user_id,
+          rule_id,
+          created_by: caller.id,
+        }));
+        const { error: insErr } = await adminClient
+          .from("user_commission_rules")
+          .insert(rows);
+
+        if (insErr) {
+          return new Response(JSON.stringify({ error: `Erro ao vincular regras: ${insErr.message}` }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, action: "update_commission_rules" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
