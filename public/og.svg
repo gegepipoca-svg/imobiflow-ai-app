@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#080808"/>
+      <stop offset="55%" stop-color="#0a0a0a"/>
+      <stop offset="100%" stop-color="#080808"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="78%" cy="22%" r="55%">
+      <stop offset="0%" stop-color="#C9A84C" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#C9A84C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="accent" cx="18%" cy="82%" r="42%">
+      <stop offset="0%" stop-color="#d7b56d" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#d7b56d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="logo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#C9A84C"/>
+      <stop offset="100%" stop-color="#655426"/>
+    </linearGradient>
+    <pattern id="grid" width="56" height="56" patternUnits="userSpaceOnUse">
+      <path d="M 56 0 L 0 0 0 56" fill="none" stroke="rgba(255,255,255,0.028)" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <rect width="1200" height="630" fill="url(#accent)"/>
+
+  <rect x="80" y="80" width="92" height="92" rx="22" fill="url(#logo)"/>
+  <text x="126" y="146" font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Inter, Arial, sans-serif" font-size="54" font-weight="900" fill="#fff" text-anchor="middle" letter-spacing="-2">C</text>
+
+  <text x="80" y="240" font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Inter, Arial, sans-serif" font-size="22" letter-spacing="6" fill="#d7b56d" font-weight="600">GESTÃO DE COMISSÕES</text>
+
+  <text x="80" y="320" font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Inter, Arial, sans-serif" font-size="64" font-weight="800" fill="#f5f5f7" letter-spacing="-2">ComissãoPro — Gestão de</text>
+  <text x="80" y="390" font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Inter, Arial, sans-serif" font-size="64" font-weight="800" fill="#f5f5f7" letter-spacing="-2">Comissões de Consórcio</text>
+
+  <text x="80" y="440" font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Inter, Arial, sans-serif" font-size="28" fill="rgba(255,255,255,0.65)" font-weight="400">Consórcio · Operações · Pagamentos</text>
+
+  <line x1="80" y1="540" x2="1120" y2="540" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+  <text x="80" y="580" font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Inter, Arial, sans-serif" font-size="20" fill="rgba(255,255,255,0.55)" font-weight="500">GESTÃO DE COMISSÕES</text>
+  <text x="1120" y="580" text-anchor="end" font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Inter, Arial, sans-serif" font-size="20" fill="#d7b56d" font-weight="600" letter-spacing="2">ComissãoPro</text>
+</svg>
