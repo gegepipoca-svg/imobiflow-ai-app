@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select("id")
         .eq("email", email)
         .eq("is_active", true)
-        .single();
+        .maybeSingle();
 
       if (participant) {
         linkedParticipantId = participant.id;

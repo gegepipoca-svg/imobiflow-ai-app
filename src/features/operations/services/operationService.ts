@@ -212,15 +212,15 @@ export async function createOperation(
   if (rpcError) throw rpcError
   if (!newId) throw new Error('RPC create_operation_with_distributions não retornou ID')
 
-  // Return the created row
+  // Return the created row (maybeSingle pra não estourar se RLS/cache atrasar)
   const { data: created, error: fetchError } = await supabase
     .from('operations')
     .select('*')
     .eq('id', newId)
-    .single()
+    .maybeSingle()
 
   if (fetchError) throw fetchError
-  return created as Operation
+  return (created ?? { id: newId }) as Operation
 }
 
 /**

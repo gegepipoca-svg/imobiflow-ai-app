@@ -14,7 +14,7 @@ import type { ProductType } from '@/shared/types'
 
 export default function OperationsListPage() {
   const navigate = useNavigate()
-  const { isAdmin, isConsultor, participantId } = useAuth()
+  const { isConsultor, participantId } = useAuth()
   const { data: operations = [], isLoading } = useOperations(
     isConsultor ? participantId : undefined
   )
@@ -107,12 +107,10 @@ export default function OperationsListPage() {
         title={isConsultor ? "Minhas Operações" : "Operações"}
         description={isConsultor ? "Acompanhe suas operações e comissões" : "Gerenciar operações e comissões"}
         action={
-          isAdmin ? (
-            <Button onClick={() => navigate('/operations/new')}>
-              <Plus className="size-4" />
-              Nova Operação
-            </Button>
-          ) : undefined
+          <Button onClick={() => navigate('/operations/new')}>
+            <Plus className="size-4" />
+            Nova Operação
+          </Button>
         }
       />
 
