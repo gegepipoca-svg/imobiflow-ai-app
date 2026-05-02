@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -116,6 +116,13 @@ export default function LoginPage() {
             >
               {isSubmitting ? "Entrando..." : "Entrar"}
             </Button>
+
+            <Link
+              to="/forgot-password"
+              className="block text-center text-sm text-muted-foreground hover:text-primary hover:underline"
+            >
+              Esqueci a senha
+            </Link>
           </form>
         </CardContent>
       </Card>

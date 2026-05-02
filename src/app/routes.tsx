@@ -8,6 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 // Lazy-loaded pages
 const LoginPage = lazy(() => import("@/features/auth/pages/LoginPage"));
+const ForgotPasswordPage = lazy(() => import("@/features/auth/pages/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("@/features/auth/pages/ResetPasswordPage"));
 const DashboardPage = lazy(() => import("@/features/dashboard/pages/DashboardPage"));
 const OperationsListPage = lazy(() => import("@/features/operations/pages/OperationsListPage"));
 const OperationFormPage = lazy(() => import("@/features/operations/pages/OperationFormPage"));
@@ -42,6 +44,8 @@ export function AppRoutes() {
           {/* Auth routes */}
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
           </Route>
 
           {/* Protected app routes */}
@@ -51,6 +55,7 @@ export function AppRoutes() {
               <Route index element={<DashboardPage />} />
               <Route path="operations">
                 <Route index element={<OperationsListPage />} />
+                <Route path="new" element={<OperationFormPage />} />
                 <Route path=":id" element={<OperationDetailPage />} />
               </Route>
               <Route path="payments" element={<PaymentsPage />} />
@@ -60,7 +65,6 @@ export function AppRoutes() {
 
               {/* Admin only */}
               <Route element={<RoleGuard allowedRoles={["admin"]} />}>
-                <Route path="operations/new" element={<OperationFormPage />} />
                 {/* operations/:id/edit removido — update completo ainda não implementado */}
                 <Route path="participants">
                   <Route index element={<ParticipantsListPage />} />
